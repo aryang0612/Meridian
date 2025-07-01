@@ -1,0 +1,107 @@
+date,description,amount,category,subcategory,is_bank_related,account_type,transaction_type
+15-12-2023,Overdrawn handling charge,-5,Bank Related,Bank Fees,1,Business Chequing,Fee
+22-12-2023,Deposit 65637859 Free Interac E-Transfer,5000,Bank Related,Deposits,1,Business Chequing,Credit
+22-12-2023,MB-Transfer to 00000 06435 80,-500,Bank Related,Transfers,1,Business Chequing,Debit
+27-12-2023,Debit memo,-150,Bank Related,Other Bank,1,Business Chequing,Debit
+27-12-2023,MB-Bill payment Rogers Bank Mastercard,-100,Bank Related,Bill Payments,1,Business Chequing,Debit
+27-12-2023,MB-Bill payment EPCOR Natural Gas L.P.(Ontario,-450,Bank Related,Bill Payments,1,Business Chequing,Debit
+27-12-2023,Term loans Santander Consumer Inc.,-682.68,Bank Related,Loan Payments,1,Business Chequing,Debit
+28-12-2023,Electronic Funds Transfer MISCELLANEOUS PAYMENT,-1500,Bank Related,Transfers,1,Business Chequing,Debit
+29-12-2023,Service charge,-12.5,Bank Related,Bank Fees,1,Business Chequing,Fee
+29-12-2023,Monthly account fee,-25,Bank Related,Bank Fees,1,Business Chequing,Fee
+02-01-2024,NSF cheque returned,-45,Bank Related,NSF Fees,1,Business Chequing,Fee
+02-01-2024,NSF handling charge,-5,Bank Related,NSF Fees,1,Business Chequing,Fee
+03-01-2024,Overdraft interest charge,-15.75,Bank Related,Overdraft,1,Business Chequing,Interest
+05-01-2024,Wire transfer fee,-25,Bank Related,Bank Fees,1,Business Chequing,Fee
+08-01-2024,Electronic Funds Transfer PAYROLL DEPOSIT,2500,Bank Related,Payroll,1,Business Chequing,Credit
+10-01-2024,ATM withdrawal fee,-3.5,Bank Related,Bank Fees,1,Business Chequing,Fee
+15-01-2024,Foreign exchange fee,-12.85,Bank Related,Special Fees,1,Business Chequing,Fee
+18-01-2024,Certified cheque fee,-15,Bank Related,Bank Fees,1,Business Chequing,Fee
+20-01-2024,Stop payment fee,-25,Bank Related,Bank Fees,1,Business Chequing,Fee
+22-01-2024,Electronic Funds Transfer GOVERNMENT CANADA,180,Bank Related,Deposits,1,Business Chequing,Credit
+25-01-2024,Draft fee,-20,Bank Related,Bank Fees,1,Business Chequing,Fee
+30-01-2024,Account maintenance fee,-15,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-05-02,TDMS STMT APR BUS,-90.22,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-05-02,TD VISA PREAUTH PYMT,-109,Bank Related,Card Transactions,1,Business Chequing,Debit
+2022-05-09,DOMINION PREM MSP,-316.91,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-05-10,BELL CANADA EFT BPY,-13.5,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-05-16,TD BUS CREDIT INS,-1.84,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-05-17,WAWANESA INS INS,-202.44,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-05-20,BELL CANADA EFT BPY,-128.31,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-05-24,NSF PAID FEE,-5,Bank Related,NSF Fees,1,Business Chequing,Fee
+2022-05-30,TD VISA PREAUTH PYMT,-192,Bank Related,Card Transactions,1,Business Chequing,Debit
+2022-05-31,MONTHLY PLAN FEE,-19,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-05-31,CASH DEP FEE,-10,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-05-31,OVERDRAFT INTEREST,-0.67,Bank Related,Overdraft,1,Business Chequing,Interest
+2022-09-01,TD IDP 20950055,253.23,Bank Related,Card Transactions,1,Business Chequing,Credit
+2022-09-01,TD MC 20950055,804.02,Bank Related,Card Transactions,1,Business Chequing,Credit
+2022-09-01,TD VISA20950055,3538.18,Bank Related,Card Transactions,1,Business Chequing,Credit
+2022-09-01,PAYROLL PAY,-1029.55,Bank Related,Payroll,1,Business Chequing,Debit
+2022-09-06,UU063 TFR-TO C/C,-4000,Bank Related,Transfers,1,Business Chequing,Debit
+2022-09-07,DOMINION PREM MSP,-316.9,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-09-12,SEND E-TFR ***ndR,-40,Bank Related,Transfers,1,Business Chequing,Debit
+2022-09-12,SEND E-TFR FEE,-1.5,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-09-12,BELL CANADA EFT BPY,-15.04,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-09-13,WW053 TFR-TO C/C,-3000,Bank Related,Transfers,1,Business Chequing,Debit
+2022-09-15,PAYROLL PAY,-121.8,Bank Related,Payroll,1,Business Chequing,Debit
+2022-09-15,WAWANESA INS INS,-202.43,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-09-15,TD BUS CREDIT INS,-1.84,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-09-16,IOL PAY TO: CRA,-7957.02,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-09-19,CHEQUE CHARGE,-74.87,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-09-20,BELL CANADA EFT BPY,-137.87,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-09-21,SEND E-TFR ***hmx,-1138.5,Bank Related,Transfers,1,Business Chequing,Debit
+2022-09-21,SEND E-TFR FEE,-1.5,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-09-23,STRIPE MSP,475.9,Bank Related,Bill Payments,1,Business Chequing,Credit
+2022-09-26,E-TRANSFER ***mMx,2780,Bank Related,Transfers,1,Business Chequing,Credit
+2022-09-26,E-TRANSFER ***uMp,4000,Bank Related,Transfers,1,Business Chequing,Credit
+2022-09-26,RO330 TFR-TO C/C,-5000,Bank Related,Transfers,1,Business Chequing,Debit
+2022-09-27,TD VISA PREAUTH PYMT,-168,Bank Related,Card Transactions,1,Business Chequing,Debit
+2022-09-29,MONTHLY PLAN FEE,-19,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-09-29,ACCT BAL REBATE,19,Bank Related,Credits,1,Business Chequing,Credit
+2022-09-29,SERVICE CHARGE,-56.25,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-01-04,LJ563 TFR-TO 6124801,-3000,Bank Related,Transfers,1,Business Chequing,Debit
+2022-01-04,TDMS STMT DEC BUS,-187.06,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-01-07,DOMINION PREM MSP,-306.26,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-01-17,WAWANESA INS INS,-238.57,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-01-17,TD BUS CREDIT INS,-1.73,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-01-17,LC/LG FEE *922642702,-300,Bank Related,Special Fees,1,Business Chequing,Fee
+2022-01-20,BELL CANADA EFT BPY,-128.31,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-01-28,JL592 TFR-FR 5227865,2000,Bank Related,Transfers,1,Business Chequing,Credit
+2022-01-28,NSF PAID FEE,-5,Bank Related,NSF Fees,1,Business Chequing,Fee
+2022-01-31,TD VISA PREAUTH PYMT,-200,Bank Related,Card Transactions,1,Business Chequing,Debit
+2022-01-31,MONTHLY PLAN FEE,-19,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-01-31,OVERDRAFT INTEREST,-0.13,Bank Related,Overdraft,1,Business Chequing,Interest
+2022-03-01,TDMS STMT FEB BUS,-90.22,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-03-04,TD VISA PREAUTH PYMT,-28,Bank Related,Card Transactions,1,Business Chequing,Debit
+2022-03-10,BELL CANADA EFT BPY,-13.91,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-03-15,WAWANESA INS INS,-238.56,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-03-15,TD BUS CREDIT INS,-1.84,Bank Related,Bank Fees,1,Business Chequing,Fee
+2022-03-21,BELL CANADA EFT BPY,-128.31,Bank Related,Bill Payments,1,Business Chequing,Debit
+2022-03-23,HQ010 TFR-FR 5227865,2500,Bank Related,Transfers,1,Business Chequing,Credit
+2022-03-23,SEND E-TFR ***aAn,-2500,Bank Related,Transfers,1,Business Chequing,Debit
+2022-03-31,IO370 TFR-FR 5227865,1000,Bank Related,Transfers,1,Business Chequing,Credit
+2022-03-31,SEND E-TFR ***SRa,-600,Bank Related,Transfers,1,Business Chequing,Debit
+2022-03-31,MONTHLY PLAN FEE,-19,Bank Related,Bank Fees,1,Business Chequing,Fee
+15-12-2023,Point of sale purchase Swiss Chalet #1906 Tillsonburgonca,-78.6,Regular Transaction,Expense,0,Personal,Debit
+16-12-2023,Point of sale purchase Shoppers Drug Mart #11 Tillsonburgonca,-50.16,Regular Transaction,Expense,0,Personal,Debit
+18-12-2023,Point of sale purchase Canadian Tire #353 Tillsonburgonca,-48.64,Regular Transaction,Expense,0,Personal,Debit
+19-12-2023,Point of sale purchase Zehrs Markets #7015 Tillsonburgonca,-137.89,Regular Transaction,Expense,0,Personal,Debit
+20-12-2023,Point of sale purchase Walmart #3644 Tillsonburgonca,-89.34,Regular Transaction,Expense,0,Personal,Debit
+21-12-2023,Point of sale purchase Tim Hortons #4628 Tillsonburgonca,-12.45,Regular Transaction,Expense,0,Personal,Debit
+22-12-2023,Point of sale purchase Shell Canada #4562 Tillsonburgonca,-67.89,Regular Transaction,Expense,0,Personal,Debit
+24-12-2023,Point of sale purchase Metro #456 Torontoonca,-234.56,Regular Transaction,Expense,0,Personal,Debit
+26-12-2023,Point of sale purchase Loblaws #2345 Torontoonca,-145.78,Regular Transaction,Expense,0,Personal,Debit
+28-12-2023,Point of sale purchase Pizza Hut #789 Tillsonburgonca,-34.99,Regular Transaction,Expense,0,Personal,Debit
+30-12-2023,Point of sale purchase LCBO #123 Tillsonburgonca,-45.67,Regular Transaction,Expense,0,Personal,Debit
+02-01-2024,Point of sale purchase Home Depot #567 Tillsonburgonca,-189.45,Regular Transaction,Expense,0,Personal,Debit
+04-01-2024,Point of sale purchase Costco #234 Torontoonca,-278.90,Regular Transaction,Expense,0,Personal,Debit
+06-01-2024,Point of sale purchase Starbucks #891 Tillsonburgonca,-8.75,Regular Transaction,Expense,0,Personal,Debit
+08-01-2024,Point of sale purchase Canadian Tire Gas #353 Tillsonburgonca,-89.12,Regular Transaction,Expense,0,Personal,Debit
+10-01-2024,Point of sale purchase Subway #456 Tillsonburgonca,-15.99,Regular Transaction,Expense,0,Personal,Debit
+12-01-2024,Point of sale purchase Walmart #3644 Tillsonburgonca,-156.78,Regular Transaction,Expense,0,Personal,Debit
+14-01-2024,Point of sale purchase McDonald's #789 Tillsonburgonca,-18.67,Regular Transaction,Expense,0,Personal,Debit
+16-01-2024,Point of sale purchase Zehrs Markets #7015 Tillsonburgonca,-98.45,Regular Transaction,Expense,0,Personal,Debit
+18-01-2024,Point of sale purchase Shoppers Drug Mart #11 Tillsonburgonca,-67.89,Regular Transaction,Expense,0,Personal,Debit
+20-01-2024,Direct deposit salary,3500,Regular Transaction,Income,0,Personal,Credit
+22-01-2024,Point of sale purchase Tim Hortons #4628 Tillsonburgonca,-7.85,Regular Transaction,Expense,0,Personal,Debit
+24-01-2024,Point of sale purchase Shell Canada #4562 Tillsonburgonca,-78.90,Regular Transaction,Expense,0,Personal,Debit

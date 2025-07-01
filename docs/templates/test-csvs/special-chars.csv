@@ -1,0 +1,6 @@
+Date,Description,Amount
+2024-01-01,"Transaction with ""quotes""",100.00
+2024-01-02,Transaction with émojis 🏦💰,50.00
+2024-01-03,Transaction with newline
+in description,75.00
+2024-01-04,Transaction with commas, semicolons;,25.00

@@ -1,0 +1,298 @@
+date,description,amount,category,subcategory,is_bank_related,account_type,transaction_type
+27-02-2023,OPEN ACCOUNT,0,Bank Related,Account Setup,1,Business Account,Neutral
+28-02-2023,GC 7736-DEPOSIT,3276,Bank Related,Deposits,1,Business Account,Credit
+28-02-2023,MONTHLY  PLAN  FEE,-1.36,Bank Related,Bank Fees,1,Business Account,Fee
+08-03-2023,SEND  E-TFR ***EYN,-1000,Bank Related,Transfers,1,Business Account,Debit
+08-03-2023,SEND  E-TFR *GRF  SALA,-1000,Bank Related,Transfers,1,Business Account,Debit
+08-03-2023,HG374  TFR-TO,-600,Bank Related,Transfers,1,Business Account,Debit
+08-03-2023,HG422  TFR-TO,-150,Bank Related,Transfers,1,Business Account,Debit
+08-03-2023,SEND  E-TFR *YHT  SALA,-350,Bank Related,Transfers,1,Business Account,Debit
+08-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+09-03-2023,GC 7736-DEPOSIT,840,Bank Related,Deposits,1,Business Account,Credit
+15-03-2023,GC 7736-DEPOSIT,2517.02,Bank Related,Deposits,1,Business Account,Credit
+15-03-2023,HR074  TFR-TO 5235824,-170,Bank Related,Transfers,1,Business Account,Debit
+15-03-2023,SEND  E-TFR ***9ZB,-800,Bank Related,Transfers,1,Business Account,Debit
+15-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+15-03-2023,SEND  E-TFR ***BJB,-800,Bank Related,Transfers,1,Business Account,Debit
+15-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+15-03-2023,SEND  E-TFR ***BQH,-500,Bank Related,Transfers,1,Business Account,Debit
+15-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+15-03-2023,IXL  BUILDING  PR,-887.95,Regular Transaction,Rent/Property,0,Business Account,Debit
+15-03-2023,SHELL  C81452,-60,Regular Transaction,Fuel/Gas,0,Business Account,Debit
+16-03-2023,TD ATM  DEP 002884,2793,Regular Transaction,Income,0,Business Account,Credit
+16-03-2023,GM  REJECT  ITEM,-2793,Regular Transaction,Expense,0,Business Account,Debit
+16-03-2023,GM  REJECT  ITEM  REV,2793,Regular Transaction,Income,0,Business Account,Credit
+16-03-2023,RTD  PARTIAL  PAYMENT,-2596.71,Regular Transaction,Expense,0,Business Account,Debit
+17-03-2023,PETRO-CANADA,-170.83,Regular Transaction,Fuel/Gas,0,Business Account,Debit
+17-03-2023,THE  HOME  DEPOT,-99.31,Regular Transaction,Expense,0,Business Account,Debit
+17-03-2023,SEND  E-TFR ***TQQ,-200,Bank Related,Transfers,1,Business Account,Debit
+17-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+20-03-2023,SEND  E-TFR ***PGN,-1500,Bank Related,Transfers,1,Business Account,Debit
+20-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+20-03-2023,THE  HOME  DEPOT,-81.89,Regular Transaction,Expense,0,Business Account,Debit
+21-03-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+21-03-2023,SEND  E-TFR ***RQH,-300,Bank Related,Transfers,1,Business Account,Debit
+21-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+22-03-2023,SEND  E-TFR ***ZHK,-500,Bank Related,Transfers,1,Business Account,Debit
+22-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+22-03-2023,SEND  E-TFR ***PPP,-500,Bank Related,Transfers,1,Business Account,Debit
+22-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+22-03-2023,FZ275  TFR-TO 5249449,-300,Bank Related,Transfers,1,Business Account,Debit
+22-03-2023,SEND  E-TFR ***LEQ,-200,Bank Related,Transfers,1,Business Account,Debit
+22-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+23-03-2023,GC 7736-DEPOSIT,2226.09,Bank Related,Deposits,1,Business Account,Credit
+24-03-2023,SEND  E-TFR ***XAK,-1000,Bank Related,Transfers,1,Business Account,Debit
+24-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+24-03-2023,SEND  E-TFR ***VMM,-700,Bank Related,Transfers,1,Business Account,Debit
+24-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+24-03-2023,SEND  E-TFR ***BDQ,-600,Bank Related,Transfers,1,Business Account,Debit
+24-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+27-03-2023,SEND  E-TFR ***YAC,-400,Bank Related,Transfers,1,Business Account,Debit
+27-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+27-03-2023,MONTHLY  PLAN  FEE,-1.36,Bank Related,Bank Fees,1,Business Account,Fee
+28-03-2023,GC 7736-DEPOSIT,1876.31,Bank Related,Deposits,1,Business Account,Credit
+29-03-2023,SEND  E-TFR ***SGT,-1500,Bank Related,Transfers,1,Business Account,Debit
+29-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+29-03-2023,SEND  E-TFR ***GTM,-500,Bank Related,Transfers,1,Business Account,Debit
+29-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+30-03-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+31-03-2023,SEND  E-TFR ***KCM,-400,Bank Related,Transfers,1,Business Account,Debit
+31-03-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+03-04-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+03-04-2023,SEND  E-TFR ***VEB,-1500,Bank Related,Transfers,1,Business Account,Debit
+03-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+04-04-2023,GC 7736-DEPOSIT,756,Bank Related,Deposits,1,Business Account,Credit
+05-04-2023,SEND  E-TFR ***RQP,-750,Bank Related,Transfers,1,Business Account,Debit
+05-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+05-04-2023,SEND  E-TFR ***PAW,-800,Bank Related,Transfers,1,Business Account,Debit
+05-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+06-04-2023,GC 7736-DEPOSIT,1008,Bank Related,Deposits,1,Business Account,Credit
+06-04-2023,SEND  E-TFR ***UKC,-1000,Bank Related,Transfers,1,Business Account,Debit
+06-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+07-04-2023,SEND  E-TFR ***MNQ,-500,Bank Related,Transfers,1,Business Account,Debit
+07-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+10-04-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+10-04-2023,SEND  E-TFR ***CMA,-1500,Bank Related,Transfers,1,Business Account,Debit
+10-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+11-04-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+12-04-2023,SEND  E-TFR ***YZY,-400,Bank Related,Transfers,1,Business Account,Debit
+12-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+12-04-2023,SEND  E-TFR ***MKP,-800,Bank Related,Transfers,1,Business Account,Debit
+12-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+13-04-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+14-04-2023,SEND  E-TFR ***RYY,-400,Bank Related,Transfers,1,Business Account,Debit
+14-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+17-04-2023,GC 7736-DEPOSIT,2352.22,Bank Related,Deposits,1,Business Account,Credit
+17-04-2023,SEND  E-TFR ***YEK,-2000,Bank Related,Transfers,1,Business Account,Debit
+17-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+18-04-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+19-04-2023,SEND  E-TFR ***HNX,-400,Bank Related,Transfers,1,Business Account,Debit
+19-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+19-04-2023,SEND  E-TFR ***GHM,-800,Bank Related,Transfers,1,Business Account,Debit
+19-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+20-04-2023,GC 7736-DEPOSIT,1008,Bank Related,Deposits,1,Business Account,Credit
+21-04-2023,SEND  E-TFR ***TMG,-1000,Bank Related,Transfers,1,Business Account,Debit
+21-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+24-04-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+24-04-2023,SEND  E-TFR ***KGB,-1500,Bank Related,Transfers,1,Business Account,Debit
+24-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+25-04-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+26-04-2023,SEND  E-TFR ***WRE,-400,Bank Related,Transfers,1,Business Account,Debit
+26-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+26-04-2023,SEND  E-TFR ***HEH,-800,Bank Related,Transfers,1,Business Account,Debit
+26-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+27-04-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+27-04-2023,MONTHLY  PLAN  FEE,-1.36,Bank Related,Bank Fees,1,Business Account,Fee
+28-04-2023,SEND  E-TFR ***PBT,-400,Bank Related,Transfers,1,Business Account,Debit
+28-04-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+01-05-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+01-05-2023,SEND  E-TFR ***SWB,-1500,Bank Related,Transfers,1,Business Account,Debit
+01-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+02-05-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+03-05-2023,SEND  E-TFR ***YKA,-400,Bank Related,Transfers,1,Business Account,Debit
+03-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+03-05-2023,SEND  E-TFR ***DEC,-800,Bank Related,Transfers,1,Business Account,Debit
+03-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+04-05-2023,GC 7736-DEPOSIT,1008,Bank Related,Deposits,1,Business Account,Credit
+05-05-2023,SEND  E-TFR ***CLT,-1000,Bank Related,Transfers,1,Business Account,Debit
+05-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+08-05-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+08-05-2023,SEND  E-TFR ***GKM,-1500,Bank Related,Transfers,1,Business Account,Debit
+08-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+09-05-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+10-05-2023,SEND  E-TFR ***JRA,-400,Bank Related,Transfers,1,Business Account,Debit
+10-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+10-05-2023,SEND  E-TFR ***WMX,-800,Bank Related,Transfers,1,Business Account,Debit
+10-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+11-05-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+12-05-2023,SEND  E-TFR ***PBC,-400,Bank Related,Transfers,1,Business Account,Debit
+12-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+15-05-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+15-05-2023,SEND  E-TFR ***TAM,-1500,Bank Related,Transfers,1,Business Account,Debit
+15-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+16-05-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+17-05-2023,SEND  E-TFR ***KYZ,-400,Bank Related,Transfers,1,Business Account,Debit
+17-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+17-05-2023,SEND  E-TFR ***WHK,-800,Bank Related,Transfers,1,Business Account,Debit
+17-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+18-05-2023,GC 7736-DEPOSIT,1008,Bank Related,Deposits,1,Business Account,Credit
+19-05-2023,SEND  E-TFR ***BDM,-1000,Bank Related,Transfers,1,Business Account,Debit
+19-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+22-05-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+22-05-2023,SEND  E-TFR ***ZQX,-1500,Bank Related,Transfers,1,Business Account,Debit
+22-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+23-05-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+24-05-2023,SEND  E-TFR ***YTA,-400,Bank Related,Transfers,1,Business Account,Debit
+24-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+24-05-2023,SEND  E-TFR ***PLA,-800,Bank Related,Transfers,1,Business Account,Debit
+24-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+25-05-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+25-05-2023,MONTHLY  PLAN  FEE,-1.36,Bank Related,Bank Fees,1,Business Account,Fee
+26-05-2023,SEND  E-TFR ***PQB,-400,Bank Related,Transfers,1,Business Account,Debit
+26-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+29-05-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+29-05-2023,SEND  E-TFR ***GBA,-1500,Bank Related,Transfers,1,Business Account,Debit
+29-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+30-05-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+31-05-2023,SEND  E-TFR ***XQM,-400,Bank Related,Transfers,1,Business Account,Debit
+31-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+31-05-2023,SEND  E-TFR ***KCW,-800,Bank Related,Transfers,1,Business Account,Debit
+31-05-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+01-06-2023,GC 7736-DEPOSIT,1008,Bank Related,Deposits,1,Business Account,Credit
+02-06-2023,SEND  E-TFR ***MBH,-1000,Bank Related,Transfers,1,Business Account,Debit
+02-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+05-06-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+05-06-2023,SEND  E-TFR ***TDQ,-1500,Bank Related,Transfers,1,Business Account,Debit
+05-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+06-06-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+07-06-2023,SEND  E-TFR ***WHD,-400,Bank Related,Transfers,1,Business Account,Debit
+07-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+07-06-2023,SEND  E-TFR ***QWC,-800,Bank Related,Transfers,1,Business Account,Debit
+07-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+08-06-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+09-06-2023,SEND  E-TFR ***DKY,-400,Bank Related,Transfers,1,Business Account,Debit
+09-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+12-06-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+12-06-2023,SEND  E-TFR ***HXA,-1500,Bank Related,Transfers,1,Business Account,Debit
+12-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+13-06-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+14-06-2023,SEND  E-TFR ***HRZ,-400,Bank Related,Transfers,1,Business Account,Debit
+14-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+14-06-2023,SEND  E-TFR ***MGT,-800,Bank Related,Transfers,1,Business Account,Debit
+14-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+15-06-2023,GC 7736-DEPOSIT,1008,Bank Related,Deposits,1,Business Account,Credit
+16-06-2023,SEND  E-TFR ***WPJ,-1000,Bank Related,Transfers,1,Business Account,Debit
+16-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+19-06-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+19-06-2023,SEND  E-TFR ***MRB,-1500,Bank Related,Transfers,1,Business Account,Debit
+19-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+20-06-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+21-06-2023,SEND  E-TFR ***DQR,-400,Bank Related,Transfers,1,Business Account,Debit
+21-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+21-06-2023,SEND  E-TFR ***ZXK,-800,Bank Related,Transfers,1,Business Account,Debit
+21-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+22-06-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+23-06-2023,SEND  E-TFR ***XCT,-400,Bank Related,Transfers,1,Business Account,Debit
+23-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+26-06-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+26-06-2023,SEND  E-TFR ***GQN,-1500,Bank Related,Transfers,1,Business Account,Debit
+26-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+26-06-2023,MONTHLY  PLAN  FEE,-1.36,Bank Related,Bank Fees,1,Business Account,Fee
+27-06-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+28-06-2023,SEND  E-TFR ***KGP,-400,Bank Related,Transfers,1,Business Account,Debit
+28-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+28-06-2023,SEND  E-TFR ***PXM,-800,Bank Related,Transfers,1,Business Account,Debit
+28-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+29-06-2023,GC 7736-DEPOSIT,1008,Bank Related,Deposits,1,Business Account,Credit
+30-06-2023,SEND  E-TFR ***QDT,-1000,Bank Related,Transfers,1,Business Account,Debit
+30-06-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+03-07-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+03-07-2023,SEND  E-TFR ***BMC,-1500,Bank Related,Transfers,1,Business Account,Debit
+03-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+04-07-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+05-07-2023,SEND  E-TFR ***QXW,-400,Bank Related,Transfers,1,Business Account,Debit
+05-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+05-07-2023,SEND  E-TFR ***PMK,-800,Bank Related,Transfers,1,Business Account,Debit
+05-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+06-07-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+07-07-2023,SEND  E-TFR ***MYD,-400,Bank Related,Transfers,1,Business Account,Debit
+07-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+10-07-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+10-07-2023,SEND  E-TFR ***KWN,-1500,Bank Related,Transfers,1,Business Account,Debit
+10-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+11-07-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+12-07-2023,SEND  E-TFR ***CTN,-400,Bank Related,Transfers,1,Business Account,Debit
+12-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+12-07-2023,SEND  E-TFR ***HBW,-800,Bank Related,Transfers,1,Business Account,Debit
+12-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+13-07-2023,GC 7736-DEPOSIT,1008,Bank Related,Deposits,1,Business Account,Credit
+14-07-2023,SEND  E-TFR ***ZCK,-1000,Bank Related,Transfers,1,Business Account,Debit
+14-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+17-07-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+17-07-2023,SEND  E-TFR ***PGD,-1500,Bank Related,Transfers,1,Business Account,Debit
+17-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+18-07-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+19-07-2023,SEND  E-TFR ***TKQ,-400,Bank Related,Transfers,1,Business Account,Debit
+19-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+19-07-2023,SEND  E-TFR ***XCN,-800,Bank Related,Transfers,1,Business Account,Debit
+19-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+20-07-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+21-07-2023,SEND  E-TFR ***GRY,-400,Bank Related,Transfers,1,Business Account,Debit
+21-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+24-07-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+24-07-2023,SEND  E-TFR ***HMZ,-1500,Bank Related,Transfers,1,Business Account,Debit
+24-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+25-07-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+26-07-2023,SEND  E-TFR ***BWT,-400,Bank Related,Transfers,1,Business Account,Debit
+26-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+26-07-2023,SEND  E-TFR ***NKG,-800,Bank Related,Transfers,1,Business Account,Debit
+26-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+27-07-2023,GC 7736-DEPOSIT,1008,Bank Related,Deposits,1,Business Account,Credit
+27-07-2023,MONTHLY  PLAN  FEE,-1.36,Bank Related,Bank Fees,1,Business Account,Fee
+28-07-2023,SEND  E-TFR ***DPW,-1000,Bank Related,Transfers,1,Business Account,Debit
+28-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+31-07-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+31-07-2023,SEND  E-TFR ***MGH,-1500,Bank Related,Transfers,1,Business Account,Debit
+31-07-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+01-08-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+02-08-2023,SEND  E-TFR ***QYK,-400,Bank Related,Transfers,1,Business Account,Debit
+02-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+02-08-2023,SEND  E-TFR ***ZWM,-800,Bank Related,Transfers,1,Business Account,Debit
+02-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+03-08-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+04-08-2023,SEND  E-TFR ***RHB,-400,Bank Related,Transfers,1,Business Account,Debit
+04-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+07-08-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+07-08-2023,SEND  E-TFR ***TQC,-1500,Bank Related,Transfers,1,Business Account,Debit
+07-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+08-08-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+09-08-2023,SEND  E-TFR ***DGK,-400,Bank Related,Transfers,1,Business Account,Debit
+09-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+09-08-2023,SEND  E-TFR ***LWX,-800,Bank Related,Transfers,1,Business Account,Debit
+09-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+10-08-2023,GC 7736-DEPOSIT,1008,Bank Related,Deposits,1,Business Account,Credit
+11-08-2023,SEND  E-TFR ***KYG,-1000,Bank Related,Transfers,1,Business Account,Debit
+11-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+14-08-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+14-08-2023,SEND  E-TFR ***XDM,-1500,Bank Related,Transfers,1,Business Account,Debit
+14-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+15-08-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+16-08-2023,SEND  E-TFR ***BCW,-400,Bank Related,Transfers,1,Business Account,Debit
+16-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+16-08-2023,SEND  E-TFR ***QZP,-800,Bank Related,Transfers,1,Business Account,Debit
+16-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+17-08-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+18-08-2023,SEND  E-TFR ***HWD,-400,Bank Related,Transfers,1,Business Account,Debit
+18-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+21-08-2023,GC 7736-DEPOSIT,1596.17,Bank Related,Deposits,1,Business Account,Credit
+21-08-2023,SEND  E-TFR ***PLY,-1500,Bank Related,Transfers,1,Business Account,Debit
+21-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+22-08-2023,GC 7736-DEPOSIT,420,Bank Related,Deposits,1,Business Account,Credit
+23-08-2023,SEND  E-TFR ***GCT,-400,Bank Related,Transfers,1,Business Account,Debit
+23-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+23-08-2023,SEND  E-TFR ***NJK,-800,Bank Related,Transfers,1,Business Account,Debit
+23-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+24-08-2023,GC 7736-DEPOSIT,1008,Bank Related,Deposits,1,Business Account,Credit
+25-08-2023,SEND  E-TFR ***YPM,-1000,Bank Related,Transfers,1,Business Account,Debit
+25-08-2023,SEND  E-TFR  FEE,-1.5,Bank Related,Bank Fees,1,Business Account,Fee
+25-08-2023,MONTHLY  PLAN  FEE,-1.36,Bank Related,Bank Fees,1,Business Account,Fee

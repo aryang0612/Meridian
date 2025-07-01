@@ -1,0 +1,21 @@
+# Meridian AI Development Aliases
+# Add this to your ~/.zshrc or ~/.bashrc: source "/Users/aryangautam/Merdian AI/.meridian-aliases"
+
+# Navigate to project root
+alias meridian="cd '/Users/aryangautam/Merdian AI'"
+
+# Development commands (work from anywhere)
+alias mdev="cd '/Users/aryangautam/Merdian AI' && npm run dev"
+alias mclean="cd '/Users/aryangautam/Merdian AI' && npm run dev:clean"
+alias mbuild="cd '/Users/aryangautam/Merdian AI' && npm run build"
+alias mrestart="cd '/Users/aryangautam/Merdian AI' && npm run restart"
+
+# Quick server management
+alias mkill="pkill -f 'next dev'"
+alias mstatus="curl -s http://localhost:3000 > /dev/null && echo '✅ Server running' || echo '❌ Server stopped'"
+
+# Open in browser
+alias mopen="open http://localhost:3000"
+
+echo "🚀 Meridian AI aliases loaded!"
+echo "Available commands: meridian, mdev, mclean, mbuild, mrestart, mkill, mstatus, mopen" 
