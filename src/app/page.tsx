@@ -34,9 +34,9 @@ export default function Dashboard() {
     aiEngineRef.current = new AIEngine('ON');
   }
 
-  // Sync with global context for persistence
+  // Sync with global context for persistence (only on mount or when financialData changes externally)
   useEffect(() => {
-    if (financialData?.dashboard) {
+    if (financialData?.dashboard && !transactions.length) {
       const dashboard = financialData.dashboard;
       setTransactions(dashboard.transactions);
       if (dashboard.processingResults) {
@@ -50,19 +50,23 @@ export default function Dashboard() {
         setShowDuplicateWarning(dashboard.duplicateResult.duplicateCount > 0);
       }
     }
-  }, [financialData]);
+  }, [financialData, transactions.length]);
 
-  // Save to global context whenever local state changes
+  // Save to global context whenever local state changes (debounced to prevent loops)
   useEffect(() => {
-    if (transactions.length > 0 || processingResults) {
-      setDashboardData({
-        transactions,
-        processingResults: processingResults || undefined,
-        currentStep,
-        duplicateResult: duplicateResult || undefined,
-        selectedProvince
-      });
-    }
+    const timeoutId = setTimeout(() => {
+      if (transactions.length > 0 || processingResults) {
+        setDashboardData({
+          transactions,
+          processingResults: processingResults || undefined,
+          currentStep,
+          duplicateResult: duplicateResult || undefined,
+          selectedProvince
+        });
+      }
+    }, 100); // Small delay to prevent rapid updates
+
+    return () => clearTimeout(timeoutId);
   }, [transactions, processingResults, currentStep, duplicateResult, selectedProvince, setDashboardData]);
 
   const handleFileProcessed = (data: {
