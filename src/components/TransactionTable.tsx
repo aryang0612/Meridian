@@ -678,12 +678,18 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
                   <td className="px-8 py-6 whitespace-nowrap text-sm font-medium text-slate-500">
                     {transaction.date}
                   </td>
-                  <td className="px-8 py-6 text-sm text-slate-900 max-w-xs">
-                    <div className="font-medium truncate leading-relaxed" title={transaction.description}>
+                  <td className="px-8 py-6 text-sm text-slate-900 max-w-md">
+                    <div className="font-medium leading-relaxed break-words group relative" title={transaction.description}>
                       {transaction.description}
+                      {transaction.description.length > 100 && (
+                        <div className="absolute left-0 top-full mt-2 p-3 bg-slate-900 text-white text-xs rounded-lg shadow-xl z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 max-w-sm break-words">
+                          {transaction.description}
+                          <div className="absolute top-0 left-4 transform -translate-y-1 w-2 h-2 bg-slate-900 rotate-45"></div>
+                        </div>
+                      )}
                     </div>
                     {transaction.merchant && (
-                      <div className="text-xs text-slate-400 truncate mt-1">
+                      <div className="text-xs text-slate-400 break-words mt-1">
                         {transaction.merchant}
                       </div>
                     )}
