@@ -18,9 +18,10 @@ if [ -f .env.local ]; then
         
         # Set the environment variable in Vercel
         echo "🔧 Setting OPENAI_API_KEY in Vercel..."
-        vercel env add OPENAI_API_KEY production <<< "$OPENAI_API_KEY"
-        vercel env add OPENAI_API_KEY preview <<< "$OPENAI_API_KEY"
-        vercel env add OPENAI_API_KEY development <<< "$OPENAI_API_KEY"
+        echo "Please enter your OpenAI API key when prompted:"
+        vercel env add OPENAI_API_KEY production
+        vercel env add OPENAI_API_KEY preview
+        vercel env add OPENAI_API_KEY development
         
         echo "✅ Environment variables set successfully!"
         echo "🔄 Redeploying to apply changes..."

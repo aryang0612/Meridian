@@ -23,7 +23,7 @@ Your OpenAI API key is already configured locally in `.env.local`. To make the c
 3. Go to **Settings** → **Environment Variables**
 4. Add a new environment variable:
    - **Name**: `OPENAI_API_KEY`
-   - **Value**: `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`
+   - **Value**: `[Your OpenAI API Key from .env.local]`
    - **Environment**: Select all (Production, Preview, Development)
 5. Click **Save**
 6. Redeploy your project
