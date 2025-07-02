@@ -13,7 +13,7 @@ interface Props {
   province?: string;
 }
 
-type SortField = 'date' | 'description' | 'amount' | 'category' | 'account' | 'confidence' | 'status' | 'feedback';
+type SortField = 'date' | 'description' | 'amount' | 'category' | 'account' | 'confidence' | 'status' | 'feedback' | 'taxRate';
 type SortDirection = 'asc' | 'desc';
 
 function TransactionTable({ transactions, onTransactionUpdate, aiEngine, province = 'ON' }: Props) {
@@ -140,6 +140,55 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
     return account.name || 'Unknown';
   };
 
+  // Get tax rate based on province and transaction type
+  const getTaxRate = (transaction: Transaction): number | undefined => {
+    // If tax rate is already set, return it
+    if (transaction.taxRate !== undefined) {
+      return transaction.taxRate;
+    }
+
+    // Auto-assign tax rates based on province and transaction type
+    const provinceTaxRates: { [key: string]: number } = {
+      'ON': 13, // HST
+      'BC': 12, // HST
+      'AB': 5,  // GST only
+      'SK': 11, // GST + PST
+      'MB': 12, // GST + PST
+      'QC': 14.975, // GST + QST
+      'NB': 15, // HST
+      'NL': 15, // HST
+      'NS': 15, // HST
+      'PE': 15, // HST
+      'NT': 5,  // GST only
+      'NU': 5,  // GST only
+      'YT': 5   // GST only
+    };
+
+    const baseTaxRate = provinceTaxRates[province] || 0;
+
+    // Zero-rated or exempt categories
+    const zeroRatedCategories = [
+      'E-Transfer',
+      'Bank Fees',
+      'Interest Income',
+      'Investment Income',
+      'Uncategorized'
+    ];
+
+    // Check if transaction should be zero-rated
+    if (zeroRatedCategories.includes(transaction.category || '')) {
+      return 0;
+    }
+
+    // For expenses, apply tax rate
+    if (transaction.amount < 0) {
+      return baseTaxRate;
+    }
+
+    // For income, usually no tax on the transaction itself (tax is on profit)
+    return 0;
+  };
+
   // Filter and sort transactions
   const filteredTransactions = useMemo(() => {
     let filtered = transactions;
@@ -196,6 +245,10 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
         case 'feedback':
           aValue = a.feedback ? 1 : 0;
           bValue = b.feedback ? 1 : 0;
+          break;
+        case 'taxRate':
+          aValue = a.taxRate ?? 0;
+          bValue = b.taxRate ?? 0;
           break;
         default:
           return 0;
@@ -753,6 +806,9 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
                   <SortableHeader field="account">Account</SortableHeader>
                 </th>
                 <th className="px-8 py-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <SortableHeader field="taxRate">Tax Rate</SortableHeader>
+                </th>
+                <th className="px-8 py-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   <SortableHeader field="confidence">Confidence</SortableHeader>
                 </th>
                 <th className="px-8 py-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -938,6 +994,31 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
                         )}
                   </button>
                     )}
+                  </td>
+                  <td className="px-8 py-6 whitespace-nowrap text-sm">
+                    <div className="flex items-center space-x-2">
+                      {(() => {
+                        const taxRate = getTaxRate(transaction);
+                        return (
+                          <>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              taxRate !== undefined
+                                ? taxRate > 0 
+                                  ? 'bg-blue-100 text-blue-800' 
+                                  : 'bg-gray-100 text-gray-600'
+                                : 'bg-slate-50 text-slate-400'
+                            }`}>
+                              {taxRate !== undefined ? `${taxRate}%` : 'N/A'}
+                            </span>
+                            {taxRate && taxRate > 0 && (
+                              <span className="text-xs text-slate-500">
+                                ${((Math.abs(transaction.amount) * taxRate) / 100).toFixed(2)}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </td>
                   <td className="px-8 py-6 whitespace-nowrap">
                     <span className={`text-xs font-medium ${getConfidenceDisplay(transaction.confidence ?? 0).color}`}>

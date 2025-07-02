@@ -12,6 +12,7 @@ export interface Transaction {
   isManuallyEdited?: boolean;
   merchant?: string;
   taxCode?: string;
+  taxRate?: number; // Tax rate as percentage (e.g., 13 for 13%)
   // Feedback system (optional - won't break existing data)
   feedback?: {
     isCorrect: boolean;
