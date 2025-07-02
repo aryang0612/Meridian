@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import FloatingChat from '../components/FloatingChat'
 import ClientLayout from '../components/ClientLayout'
+import StorageIndicator from '../components/StorageIndicator'
 import { FinancialDataProvider } from '../context/FinancialDataContext'
 
 export const metadata: Metadata = {
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ClientLayout>
             {children}
             <FloatingChat />
+            <StorageIndicator />
           </ClientLayout>
         </FinancialDataProvider>
       </body>
