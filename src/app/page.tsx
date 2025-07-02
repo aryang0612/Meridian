@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Transaction, ValidationResult } from '../lib/types';
 import { BankFormat } from '../data/bankFormats';
 import { DuplicateDetectionResult } from '../lib/duplicateDetector';
@@ -12,8 +12,10 @@ import DuplicateWarning from '../components/DuplicateWarning';
 import NavigationBar from '../components/NavigationBar';
 import Image from 'next/image';
 import { PROVINCES } from '../data/provinces';
+import { useFinancialData } from '../context/FinancialDataContext';
 
 export default function Dashboard() {
+  const { financialData, setDashboardData } = useFinancialData();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [processingResults, setProcessingResults] = useState<{
     validation: ValidationResult;
@@ -31,6 +33,37 @@ export default function Dashboard() {
   if (!aiEngineRef.current) {
     aiEngineRef.current = new AIEngine('ON');
   }
+
+  // Sync with global context for persistence
+  useEffect(() => {
+    if (financialData?.dashboard) {
+      const dashboard = financialData.dashboard;
+      setTransactions(dashboard.transactions);
+      if (dashboard.processingResults) {
+        setProcessingResults(dashboard.processingResults);
+      }
+      if (dashboard.currentStep) {
+        setCurrentStep(dashboard.currentStep);
+      }
+      if (dashboard.duplicateResult) {
+        setDuplicateResult(dashboard.duplicateResult);
+        setShowDuplicateWarning(dashboard.duplicateResult.duplicateCount > 0);
+      }
+    }
+  }, [financialData]);
+
+  // Save to global context whenever local state changes
+  useEffect(() => {
+    if (transactions.length > 0 || processingResults) {
+      setDashboardData({
+        transactions,
+        processingResults: processingResults || undefined,
+        currentStep,
+        duplicateResult: duplicateResult || undefined,
+        selectedProvince
+      });
+    }
+  }, [transactions, processingResults, currentStep, duplicateResult, selectedProvince, setDashboardData]);
 
   const handleFileProcessed = (data: {
     transactions: Transaction[];

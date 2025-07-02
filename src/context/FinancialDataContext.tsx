@@ -2,10 +2,32 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { FinancialData } from '../lib/reportGenerator';
+import type { Transaction, ValidationResult } from '../lib/types';
+import type { BankFormat } from '../data/bankFormats';
+import type { DuplicateDetectionResult } from '../lib/duplicateDetector';
+
+// Extended interface for dashboard state
+interface DashboardData {
+  transactions: Transaction[];
+  processingResults?: {
+    validation: ValidationResult;
+    bankFormat: BankFormat | 'Unknown';
+    stats: any;
+  };
+  currentStep?: 'upload' | 'review' | 'export';
+  duplicateResult?: DuplicateDetectionResult;
+  selectedProvince?: string;
+}
+
+// Combined interface for both report data and dashboard state
+interface ExtendedFinancialData extends FinancialData {
+  dashboard?: DashboardData;
+}
 
 type FinancialDataContextType = {
-  financialData: FinancialData | null;
-  setFinancialData: (data: FinancialData | null) => void;
+  financialData: ExtendedFinancialData | null;
+  setFinancialData: (data: ExtendedFinancialData | null) => void;
+  setDashboardData: (data: DashboardData) => void;
   isSample: boolean;
   setIsSample: (isSample: boolean) => void;
   // New persistent storage functions
@@ -54,8 +76,27 @@ const STORAGE_KEYS = {
 };
 
 export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [financialData, setFinancialData] = useState<FinancialData | null>(null);
+  const [financialData, setFinancialData] = useState<ExtendedFinancialData | null>(null);
   const [isSample, setIsSample] = useState<boolean>(false);
+
+  const setDashboardData = (dashboardData: DashboardData) => {
+    setFinancialData(prev => {
+      if (!prev) {
+        return {
+          transactions: [],
+          startDate: new Date(),
+          endDate: new Date(),
+          companyName: '',
+          reportDate: new Date(),
+          dashboard: dashboardData
+        };
+      }
+      return {
+        ...prev,
+        dashboard: dashboardData
+      };
+    });
+  };
 
   // Load data from storage on mount (safe)
   useEffect(() => {
@@ -120,6 +161,7 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
     <FinancialDataContext.Provider value={{ 
       financialData, 
       setFinancialData, 
+      setDashboardData,
       isSample, 
       setIsSample,
       saveToStorage,
