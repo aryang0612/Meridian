@@ -120,10 +120,30 @@ export default function Dashboard() {
     setCurrentStep('export');
   };
 
+  const handleNewFile = () => {
+    // Clear all data and go back to upload step
+    setTransactions([]);
+    setProcessingResults(null);
+    setDuplicateResult(null);
+    setShowDuplicateWarning(false);
+    setError(null);
+    setCurrentStep('upload');
+    
+    // Clear from global context as well
+    setDashboardData({
+      transactions: [],
+      selectedProvince
+    });
+  };
+
   return (
     <div className="min-h-screen">
       {/* Professional Navigation Bar */}
-      <NavigationBar activeSection="dashboard" />
+      <NavigationBar 
+        activeSection="dashboard" 
+        showNewFileButton={currentStep !== 'upload'}
+        onNewFile={handleNewFile}
+      />
 
       {/* Enhanced Main Content Area */}
       <div className="relative min-h-screen bg-white">
@@ -348,13 +368,21 @@ export default function Dashboard() {
                         Review & Code Transactions
               </h2>
                     </div>
-              <button
-                onClick={proceedToExport}
-                      className="px-8 py-3 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all duration-200 font-medium"
-              >
-                      Proceed to Export
-              </button>
-            </div>
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={handleNewFile}
+                        className="px-6 py-3 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-all duration-200 font-medium border border-red-200"
+                      >
+                        Start Over
+                      </button>
+                      <button
+                        onClick={proceedToExport}
+                        className="px-8 py-3 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all duration-200 font-medium"
+                      >
+                        Proceed to Export
+                      </button>
+                    </div>
+                  </div>
             {/* Province Selector */}
             <div className="mb-8 flex items-center space-x-4">
               <label className="text-sm font-semibold text-gray-700">Province:</label>
@@ -390,13 +418,21 @@ export default function Dashboard() {
                       Export for Accounting
             </h2>
                   </div>
-            <button
-              onClick={() => setCurrentStep('review')}
-                    className="px-8 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-all duration-200 font-medium"
-            >
-              ← Back to Review
-            </button>
-          </div>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={handleNewFile}
+                      className="px-6 py-3 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-all duration-200 font-medium border border-red-200"
+                    >
+                      Start Over
+                    </button>
+                    <button
+                      onClick={() => setCurrentStep('review')}
+                      className="px-8 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-all duration-200 font-medium"
+                    >
+                      ← Back to Review
+                    </button>
+                  </div>
+                </div>
           <ExportManager transactions={transactions} province={selectedProvince} />
         </div>
       )}

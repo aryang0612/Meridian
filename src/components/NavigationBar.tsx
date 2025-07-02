@@ -5,9 +5,16 @@ import Link from 'next/link';
 interface NavigationBarProps {
   currentStep?: 'upload' | 'review' | 'export';
   activeSection?: 'dashboard' | 'reports' | 'settings' | 'help';
+  onNewFile?: () => void;
+  showNewFileButton?: boolean;
 }
 
-export default function NavigationBar({ currentStep, activeSection = 'dashboard' }: NavigationBarProps) {
+export default function NavigationBar({ 
+  currentStep, 
+  activeSection = 'dashboard',
+  onNewFile,
+  showNewFileButton = false
+}: NavigationBarProps) {
   const navigationItems = [
     { label: 'Dashboard', href: '/', key: 'dashboard' },
     { label: 'Reports', href: '/reports', key: 'reports' },
@@ -59,6 +66,19 @@ export default function NavigationBar({ currentStep, activeSection = 'dashboard'
 
           {/* Right: Status and User Area */}
           <div className="flex items-center space-x-4">
+            {/* New File Button */}
+            {showNewFileButton && onNewFile && (
+              <button
+                onClick={onNewFile}
+                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg font-medium hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transform hover:scale-105"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="hidden sm:inline">New File</span>
+              </button>
+            )}
+
             {/* CRA Compliant Badge */}
             <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-full">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
