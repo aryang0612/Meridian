@@ -4,8 +4,201 @@ import { BANK_FORMATS, BankFormat } from '../data/bankFormats';
 import { AIEngine } from './aiEngine';
 import { detectDuplicates, DuplicateDetectionResult } from './duplicateDetector';
 
+// Enhanced header formatting patterns
+const HEADER_PATTERNS = {
+  date: [
+    'date', 'transaction date', 'posting date', 'value date', 'effective date',
+    'date posted', 'date processed', 'transaction date', 'post date',
+    'settlement date', 'clearing date', 'book date', 'entry date'
+  ],
+  description: [
+    'description', 'transaction details', 'details', 'narration', 'memo',
+    'note', 'reference', 'transaction description', 'transaction details',
+    'payee', 'merchant', 'vendor', 'transaction type', 'activity',
+    'transaction narrative', 'transaction memo', 'transaction note',
+    'description of transaction', 'transaction description', 'details of transaction'
+  ],
+  amount: [
+    'amount', 'transaction amount', 'value', 'balance', 'debit', 'credit',
+    'withdrawal', 'deposit', 'transaction value', 'amount debited',
+    'amount credited', 'debit amount', 'credit amount', 'transaction balance',
+    'net amount', 'total amount', 'transaction total', 'amount in cad',
+    'amount in usd', 'amount in foreign currency'
+  ],
+  balance: [
+    'balance', 'running balance', 'account balance', 'closing balance',
+    'ending balance', 'current balance', 'balance after transaction',
+    'available balance', 'ledger balance', 'book balance'
+  ],
+  reference: [
+    'reference', 'reference number', 'transaction id', 'transaction number',
+    'check number', 'cheque number', 'reference code', 'transaction reference',
+    'confirmation number', 'trace number', 'sequence number'
+  ],
+  category: [
+    'category', 'transaction category', 'account category', 'type',
+    'transaction type', 'activity type', 'category code', 'account type'
+  ]
+};
+
+// Header normalization and formatting options
+const HEADER_FORMATTING_OPTIONS = {
+  // Remove common prefixes/suffixes
+  removePrefixes: ['the ', 'transaction ', 'account ', 'bank ', 'statement '],
+  removeSuffixes: [' column', ' field', ' info', ' data'],
+  
+  // Common abbreviations to expand
+  abbreviations: {
+    'desc': 'description',
+    'amt': 'amount',
+    'bal': 'balance',
+    'ref': 'reference',
+    'cat': 'category',
+    'txn': 'transaction',
+    'dt': 'date',
+    'debit': 'amount',
+    'credit': 'amount'
+  },
+  
+  // Common misspellings and variations
+  corrections: {
+    'desciption': 'description',
+    'desription': 'description',
+    'ammount': 'amount',
+    'balence': 'balance',
+    'refrence': 'reference',
+    'catagory': 'category',
+    'tranaction': 'transaction',
+    'tranasction': 'transaction',
+    'transction': 'transaction',
+    'transaciton': 'transaction',
+    'transacton': 'transaction',
+    'transactin': 'transaction',
+    'transactio': 'transaction',
+    'transacti': 'transaction',
+    'transact': 'transaction',
+    'transac': 'transaction',
+    'transa': 'transaction',
+    'trans': 'transaction',
+    'tran': 'transaction',
+    'tr': 'transaction'
+  }
+};
+
 export class CSVProcessor {
   private aiEngine = new AIEngine();
+
+  /**
+   * Enhanced header normalization with comprehensive formatting
+   */
+  private normalizeHeader(header: string): string {
+    if (!header) return '';
+    
+    let normalized = header
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .replace(/[^\w\s]/g, ' ') // Remove special characters except spaces
+      .trim();
+    
+    // Apply corrections for common misspellings
+    for (const [incorrect, correct] of Object.entries(HEADER_FORMATTING_OPTIONS.corrections)) {
+      normalized = normalized.replace(new RegExp(incorrect, 'gi'), correct);
+    }
+    
+    // Expand abbreviations
+    for (const [abbr, full] of Object.entries(HEADER_FORMATTING_OPTIONS.abbreviations)) {
+      normalized = normalized.replace(new RegExp(`\\b${abbr}\\b`, 'gi'), full);
+    }
+    
+    // Remove common prefixes
+    for (const prefix of HEADER_FORMATTING_OPTIONS.removePrefixes) {
+      if (normalized.startsWith(prefix)) {
+        normalized = normalized.substring(prefix.length).trim();
+      }
+    }
+    
+    // Remove common suffixes
+    for (const suffix of HEADER_FORMATTING_OPTIONS.removeSuffixes) {
+      if (normalized.endsWith(suffix)) {
+        normalized = normalized.substring(0, normalized.length - suffix.length).trim();
+      }
+    }
+    
+    return normalized;
+  }
+
+  /**
+   * Enhanced header classification with pattern matching
+   */
+  private classifyHeader(header: string): { type: string; confidence: number; alternatives: string[] } {
+    const normalized = this.normalizeHeader(header);
+    let bestMatch = { type: 'unknown', confidence: 0, alternatives: [] as string[] };
+    
+    // Check each pattern type
+    for (const [type, patterns] of Object.entries(HEADER_PATTERNS)) {
+      for (const pattern of patterns) {
+        const similarity = this.calculateSimilarity(normalized, pattern);
+        if (similarity > bestMatch.confidence) {
+          bestMatch = {
+            type,
+            confidence: similarity,
+            alternatives: patterns.filter(p => p !== pattern)
+          };
+        }
+      }
+    }
+    
+    return bestMatch;
+  }
+
+  /**
+   * Calculate similarity between two strings (simple implementation)
+   */
+  private calculateSimilarity(str1: string, str2: string): number {
+    if (str1 === str2) return 1.0;
+    if (str1.includes(str2) || str2.includes(str1)) return 0.9;
+    
+    // Simple word-based similarity
+    const words1 = str1.split(' ');
+    const words2 = str2.split(' ');
+    const commonWords = words1.filter(w1 => words2.some(w2 => w1 === w2 || w1.includes(w2) || w2.includes(w1)));
+    
+    if (commonWords.length === 0) return 0;
+    
+    return commonWords.length / Math.max(words1.length, words2.length);
+  }
+
+  /**
+   * Enhanced header mapping with suggestions
+   */
+  private mapHeadersToColumns(headers: string[]): {
+    dateColumn?: string;
+    descriptionColumn?: string;
+    amountColumn?: string;
+    balanceColumn?: string;
+    referenceColumn?: string;
+    categoryColumn?: string;
+    suggestions: { [key: string]: string[] };
+    confidence: { [key: string]: number };
+  } {
+    const mapping: any = {};
+    const suggestions: { [key: string]: string[] } = {};
+    const confidence: { [key: string]: number } = {};
+    
+    // Analyze each header
+    for (const header of headers) {
+      const classification = this.classifyHeader(header);
+      
+      if (classification.confidence > 0.5) {
+        mapping[`${classification.type}Column`] = header;
+        confidence[classification.type] = classification.confidence;
+        suggestions[classification.type] = classification.alternatives;
+      }
+    }
+    
+    return { ...mapping, suggestions, confidence };
+  }
 
   /**
    * Detect bank format from headers with enhanced flexibility
@@ -15,12 +208,16 @@ export class CSVProcessor {
       return 'Unknown';
     }
 
-    const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
+    const normalizedHeaders = headers.map(h => this.normalizeHeader(h));
     console.log('🔍 Analyzing headers:', normalizedHeaders);
+    
+    // Enhanced header mapping
+    const headerMapping = this.mapHeadersToColumns(headers);
+    console.log('📋 Header mapping:', headerMapping);
 
     // Enhanced format detection with multiple fallback strategies
     for (const [bankName, format] of Object.entries(BANK_FORMATS)) {
-      const formatIdentifiers = format.identifier.map(id => id.toLowerCase().trim());
+      const formatIdentifiers = format.identifier.map(id => this.normalizeHeader(id));
       
       // Check if all required columns are present
       const hasAllRequiredColumns = formatIdentifiers.every(id => 
@@ -35,15 +232,13 @@ export class CSVProcessor {
 
     // Enhanced generic format detection with flexible column matching
     const hasDate = normalizedHeaders.some(h => 
-      h.includes('date') || h.includes('time') || h === 'date' || h === 'transaction date'
+      HEADER_PATTERNS.date.some(pattern => h.includes(pattern) || pattern.includes(h))
     );
     const hasDescription = normalizedHeaders.some(h => 
-      h.includes('description') || h.includes('detail') || h.includes('transaction') || 
-      h.includes('memo') || h.includes('note') || h.includes('narration')
+      HEADER_PATTERNS.description.some(pattern => h.includes(pattern) || pattern.includes(h))
     );
     const hasAmount = normalizedHeaders.some(h => 
-      h.includes('amount') || h.includes('value') || h.includes('balance') || 
-      h.includes('debit') || h.includes('credit') || h === 'amount'
+      HEADER_PATTERNS.amount.some(pattern => h.includes(pattern) || pattern.includes(h))
     );
 
     if (hasDate && hasDescription && hasAmount) {
@@ -53,15 +248,13 @@ export class CSVProcessor {
 
     // Additional fallback: try to find any columns that could work
     const potentialDateColumns = normalizedHeaders.filter(h => 
-      h.includes('date') || h.includes('time')
+      HEADER_PATTERNS.date.some(pattern => h.includes(pattern) || pattern.includes(h))
     );
     const potentialDescColumns = normalizedHeaders.filter(h => 
-      h.includes('description') || h.includes('detail') || h.includes('transaction') ||
-      h.includes('memo') || h.includes('note') || h.includes('narration')
+      HEADER_PATTERNS.description.some(pattern => h.includes(pattern) || pattern.includes(h))
     );
     const potentialAmountColumns = normalizedHeaders.filter(h => 
-      h.includes('amount') || h.includes('value') || h.includes('balance') ||
-      h.includes('debit') || h.includes('credit')
+      HEADER_PATTERNS.amount.some(pattern => h.includes(pattern) || pattern.includes(h))
     );
 
     if (potentialDateColumns.length > 0 && potentialDescColumns.length > 0 && potentialAmountColumns.length > 0) {
@@ -79,10 +272,14 @@ export class CSVProcessor {
   }
 
   /**
-   * Detect bank format using headers and sample data
+   * Detect bank format using headers and sample data with enhanced formatting
    */
   detectBankFormatWithData(headers: string[], sampleData: any[], filename?: string): BankFormat | 'Unknown' {
-    const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
+    const normalizedHeaders = headers.map(h => this.normalizeHeader(h));
+    
+    // Enhanced header mapping for better analysis
+    const headerMapping = this.mapHeadersToColumns(headers);
+    console.log('📋 Enhanced header analysis:', headerMapping);
     
     // Check for BT Records format based on filename first
     if (filename && filename.toLowerCase().includes('bt records')) {
@@ -90,11 +287,16 @@ export class CSVProcessor {
       return 'BT_Records';
     }
     
-    // Get a sample date from the first few rows - check multiple possible date columns
-    const sampleDate = sampleData.length > 0 ? 
-      sampleData[0]['Date'] || 
-      sampleData[0]['Transaction Date'] || 
-      sampleData[0]['DATE'] : null;
+    // Enhanced sample date detection using header mapping
+    let sampleDate = null;
+    if (sampleData.length > 0) {
+      const dateColumn = headerMapping.dateColumn || 'Date';
+      sampleDate = sampleData[0][dateColumn] || 
+                   sampleData[0]['Date'] || 
+                   sampleData[0]['Transaction Date'] || 
+                   sampleData[0]['DATE'] || 
+                   sampleData[0]['date'];
+    }
     console.log(`📅 Sample date for format detection: "${sampleDate}"`);
     
     // Check for most specific formats first - prioritize exact matches
@@ -104,23 +306,32 @@ export class CSVProcessor {
       const format = BANK_FORMATS[bank as BankFormat];
       if (!format) continue;
       
+      // Enhanced header matching with normalized headers
+      const formatIdentifiers = format.identifier.map(id => this.normalizeHeader(id));
+      
       // Check for exact header matches first
-      const exactMatches = format.identifier.filter(col => 
-        normalizedHeaders.includes(col.toLowerCase())
+      const exactMatches = formatIdentifiers.filter(col => 
+        normalizedHeaders.includes(col)
       );
       
       // If we have exact matches for all required columns, use this format
-      if (exactMatches.length === format.identifier.length) {
+      if (exactMatches.length === formatIdentifiers.length) {
         console.log(`✅ Detected bank format: ${bank} (exact match)`);
         return bank as BankFormat;
       }
       
-      // Otherwise, check for partial matches (contains/includes)
-      const hasAllColumns = format.identifier.every(col => 
-        normalizedHeaders.some(header => 
-          header.includes(col.toLowerCase()) || 
-          col.toLowerCase().includes(header)
-        )
+      // Enhanced partial matching with pattern-based approach
+      const hasAllColumns = formatIdentifiers.every(col => 
+        normalizedHeaders.some(header => {
+          // Direct match
+          if (header === col) return true;
+          
+          // Pattern-based matching
+          const colType = this.classifyHeader(col).type;
+          const headerType = this.classifyHeader(header).type;
+          
+          return colType === headerType && this.calculateSimilarity(header, col) > 0.7;
+        })
       );
       
       if (!hasAllColumns) continue;
@@ -162,8 +373,22 @@ export class CSVProcessor {
       }
     }
     
+    // Enhanced fallback: try to create a custom format based on detected columns
+    if (headerMapping.dateColumn && headerMapping.descriptionColumn && headerMapping.amountColumn) {
+      console.log('✅ Creating custom format based on detected columns');
+      console.log('📋 Detected columns:', {
+        date: headerMapping.dateColumn,
+        description: headerMapping.descriptionColumn,
+        amount: headerMapping.amountColumn,
+        balance: headerMapping.balanceColumn,
+        reference: headerMapping.referenceColumn
+      });
+      return 'Generic';
+    }
+    
     console.warn('❌ Unknown bank format detected');
     console.log('Available headers:', normalizedHeaders);
+    console.log('Header mapping:', headerMapping);
     console.log('Sample date:', sampleDate);
     return 'Unknown';
   }
@@ -560,7 +785,7 @@ export class CSVProcessor {
   }
 
   /**
-   * Validate CSV headers
+   * Validate CSV headers with enhanced formatting support
    */
   private validateHeaders(headers: string[]): ValidationResult {
     const result: ValidationResult = { isValid: true, errors: [], warnings: [] };
@@ -571,15 +796,32 @@ export class CSVProcessor {
       return result;
     }
     
-    // Check if headers match any known bank format
-    const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
+    // Enhanced header analysis
+    const headerMapping = this.mapHeadersToColumns(headers);
+    const normalizedHeaders = headers.map(h => this.normalizeHeader(h));
+    
+    console.log('🔍 Enhanced header validation:', {
+      original: headers,
+      normalized: normalizedHeaders,
+      mapping: headerMapping
+    });
+    
     let formatFound = false;
     
-    // Check against all known bank formats
+    // Check against all known bank formats with enhanced matching
     for (const [bankName, format] of Object.entries(BANK_FORMATS)) {
-      const formatIdentifiers = format.identifier.map(id => id.toLowerCase().trim());
+      const formatIdentifiers = format.identifier.map(id => this.normalizeHeader(id));
       const hasAllRequiredColumns = formatIdentifiers.every(id => 
-        normalizedHeaders.includes(id)
+        normalizedHeaders.some(header => {
+          // Exact match
+          if (header === id) return true;
+          
+          // Pattern-based matching
+          const idType = this.classifyHeader(id).type;
+          const headerType = this.classifyHeader(header).type;
+          
+          return idType === headerType && this.calculateSimilarity(header, id) > 0.7;
+        })
       );
       
       if (hasAllRequiredColumns) {
@@ -589,31 +831,87 @@ export class CSVProcessor {
       }
     }
     
-    // If no exact format match, check for generic required columns
+    // Enhanced generic format detection with pattern matching
     if (!formatFound) {
       const hasDate = normalizedHeaders.some(h => 
-        h.includes('date') || h.includes('time') || h === 'date'
+        HEADER_PATTERNS.date.some(pattern => h.includes(pattern) || pattern.includes(h))
       );
       const hasDescription = normalizedHeaders.some(h => 
-        h.includes('description') || h.includes('detail') || h.includes('transaction') || h === 'description'
+        HEADER_PATTERNS.description.some(pattern => h.includes(pattern) || pattern.includes(h))
       );
       const hasAmount = normalizedHeaders.some(h => 
-        h.includes('amount') || h.includes('value') || h.includes('balance') || h === 'amount'
+        HEADER_PATTERNS.amount.some(pattern => h.includes(pattern) || pattern.includes(h))
       );
       
       if (hasDate && hasDescription && hasAmount) {
         formatFound = true;
-        console.log(`✅ Headers match generic CSV format`);
+        console.log(`✅ Headers match generic CSV format with pattern matching`);
+        
+        // Add helpful suggestions for better formatting
+        if (headerMapping.suggestions.date?.length > 0) {
+          result.warnings.push(`Consider using standard header 'Date' instead of '${headerMapping.dateColumn}'`);
+        }
+        if (headerMapping.suggestions.description?.length > 0) {
+          result.warnings.push(`Consider using standard header 'Description' instead of '${headerMapping.descriptionColumn}'`);
+        }
+        if (headerMapping.suggestions.amount?.length > 0) {
+          result.warnings.push(`Consider using standard header 'Amount' instead of '${headerMapping.amountColumn}'`);
+        }
       } else {
+        // Enhanced error messages with suggestions
         if (!hasDate) {
-          result.errors.push('No date column found');
+          const potentialDateHeaders = headers.filter(h => 
+            HEADER_PATTERNS.date.some(pattern => 
+              this.normalizeHeader(h).includes(pattern) || pattern.includes(this.normalizeHeader(h))
+            )
+          );
+          if (potentialDateHeaders.length > 0) {
+            result.errors.push(`No clear date column found. Potential matches: ${potentialDateHeaders.join(', ')}`);
+          } else {
+            result.errors.push('No date column found. Expected headers like: Date, Transaction Date, Posting Date');
+          }
         }
         if (!hasDescription) {
-          result.errors.push('No description column found');
+          const potentialDescHeaders = headers.filter(h => 
+            HEADER_PATTERNS.description.some(pattern => 
+              this.normalizeHeader(h).includes(pattern) || pattern.includes(this.normalizeHeader(h))
+            )
+          );
+          if (potentialDescHeaders.length > 0) {
+            result.errors.push(`No clear description column found. Potential matches: ${potentialDescHeaders.join(', ')}`);
+          } else {
+            result.errors.push('No description column found. Expected headers like: Description, Transaction Details, Memo');
+          }
         }
         if (!hasAmount) {
-          result.errors.push('No amount column found');
+          const potentialAmountHeaders = headers.filter(h => 
+            HEADER_PATTERNS.amount.some(pattern => 
+              this.normalizeHeader(h).includes(pattern) || pattern.includes(this.normalizeHeader(h))
+            )
+          );
+          if (potentialAmountHeaders.length > 0) {
+            result.errors.push(`No clear amount column found. Potential matches: ${potentialAmountHeaders.join(', ')}`);
+          } else {
+            result.errors.push('No amount column found. Expected headers like: Amount, Transaction Amount, Value');
+          }
         }
+      }
+    }
+    
+    // Enhanced warnings for non-standard headers
+    if (formatFound) {
+      const nonStandardHeaders = headers.filter(h => {
+        const normalized = this.normalizeHeader(h);
+        return !HEADER_PATTERNS.date.some(p => normalized.includes(p)) &&
+               !HEADER_PATTERNS.description.some(p => normalized.includes(p)) &&
+               !HEADER_PATTERNS.amount.some(p => normalized.includes(p)) &&
+               !HEADER_PATTERNS.balance.some(p => normalized.includes(p)) &&
+               !HEADER_PATTERNS.reference.some(p => normalized.includes(p)) &&
+               !HEADER_PATTERNS.category.some(p => normalized.includes(p));
+      });
+      
+      if (nonStandardHeaders.length > 0) {
+        result.warnings.push(`Non-standard headers detected: ${nonStandardHeaders.join(', ')}. These will be ignored.`);
       }
     }
     
@@ -621,6 +919,10 @@ export class CSVProcessor {
       result.isValid = false;
       console.log(`❌ Headers don't match any known format:`, headers);
       console.log(`Available formats:`, Object.keys(BANK_FORMATS));
+      
+      // Provide helpful suggestions
+      result.errors.push('CSV format not recognized. Please ensure your file has columns for Date, Description, and Amount.');
+      result.errors.push('Common header variations are supported (e.g., "Transaction Date", "Transaction Details", "Transaction Amount").');
     }
     
     return result;
@@ -707,5 +1009,101 @@ export class CSVProcessor {
       highConfidencePercent: Math.round((highConfidence / total) * 100),
       needsReviewPercent: Math.round((needsReview / total) * 100)
     };
+  }
+
+  /**
+   * Get header formatting suggestions for better CSV compatibility
+   */
+  getHeaderFormattingSuggestions(headers: string[]): {
+    suggestions: string[];
+    warnings: string[];
+    recommendedHeaders: string[];
+  } {
+    const suggestions: string[] = [];
+    const warnings: string[] = [];
+    const recommendedHeaders = ['Date', 'Description', 'Amount'];
+    
+    const headerMapping = this.mapHeadersToColumns(headers);
+    const normalizedHeaders = headers.map(h => this.normalizeHeader(h));
+    
+    // Check for missing required columns
+    if (!headerMapping.dateColumn) {
+      suggestions.push('Add a "Date" column for transaction dates');
+      warnings.push('Date column is required for proper transaction processing');
+    }
+    
+    if (!headerMapping.descriptionColumn) {
+      suggestions.push('Add a "Description" column for transaction details');
+      warnings.push('Description column is required for AI categorization');
+    }
+    
+    if (!headerMapping.amountColumn) {
+      suggestions.push('Add an "Amount" column for transaction values');
+      warnings.push('Amount column is required for financial calculations');
+    }
+    
+    // Suggest standard headers for non-standard ones
+    if (headerMapping.dateColumn && headerMapping.dateColumn !== 'Date') {
+      suggestions.push(`Consider renaming "${headerMapping.dateColumn}" to "Date" for better compatibility`);
+    }
+    
+    if (headerMapping.descriptionColumn && headerMapping.descriptionColumn !== 'Description') {
+      suggestions.push(`Consider renaming "${headerMapping.descriptionColumn}" to "Description" for better compatibility`);
+    }
+    
+    if (headerMapping.amountColumn && headerMapping.amountColumn !== 'Amount') {
+      suggestions.push(`Consider renaming "${headerMapping.amountColumn}" to "Amount" for better compatibility`);
+    }
+    
+    // Check for common formatting issues
+    headers.forEach(header => {
+      const normalized = this.normalizeHeader(header);
+      
+      // Check for excessive capitalization
+      if (header !== header.toLowerCase() && header !== header.toUpperCase() && 
+          header !== header.charAt(0).toUpperCase() + header.slice(1).toLowerCase()) {
+        suggestions.push(`Consider using proper case for "${header}" (e.g., "Date" instead of "DATE" or "date")`);
+      }
+      
+      // Check for special characters
+      if (/[^\w\s]/.test(header)) {
+        suggestions.push(`Remove special characters from "${header}" for better compatibility`);
+      }
+      
+      // Check for excessive length
+      if (header.length > 30) {
+        suggestions.push(`Consider shortening "${header}" (currently ${header.length} characters)`);
+      }
+    });
+    
+    // Add optional but recommended columns
+    if (!headerMapping.balanceColumn) {
+      suggestions.push('Consider adding a "Balance" column for running balance information');
+    }
+    
+    if (!headerMapping.referenceColumn) {
+      suggestions.push('Consider adding a "Reference" column for transaction IDs or check numbers');
+    }
+    
+    return { suggestions, warnings, recommendedHeaders };
+  }
+
+  /**
+   * Generate a CSV template with proper headers
+   */
+  generateCSVTemplate(): string {
+    const headers = ['Date', 'Description', 'Amount', 'Balance', 'Reference'];
+    const sampleData = [
+      ['2024-01-15', 'Coffee Shop Purchase', '5.50', '1234.56', 'TXN001'],
+      ['2024-01-16', 'Gas Station', '45.00', '1189.56', 'TXN002'],
+      ['2024-01-17', 'Grocery Store', '125.75', '1063.81', 'TXN003']
+    ];
+    
+    const csvContent = [
+      headers.join(','),
+      ...sampleData.map(row => row.join(','))
+    ].join('\n');
+    
+    return csvContent;
   }
 } 
