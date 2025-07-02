@@ -13,6 +13,9 @@ interface Props {
   province?: string;
 }
 
+type SortField = 'date' | 'description' | 'amount' | 'category' | 'account' | 'confidence' | 'status' | 'feedback';
+type SortDirection = 'asc' | 'desc';
+
 function TransactionTable({ transactions, onTransactionUpdate, aiEngine, province = 'ON' }: Props) {
   const [filter, setFilter] = useState<'all' | 'needs-review' | 'high-confidence'>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -22,8 +25,49 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showSmartSelect, setShowSmartSelect] = useState(false);
   const [chartInitialized, setChartInitialized] = useState(false);
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const chartOfAccounts = useMemo(() => new ChartOfAccounts(province), [province]);
+
+  // Sorting function
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  // Sort arrow component
+  const SortArrow = ({ field }: { field: SortField }) => {
+    if (sortField !== field) {
+      return (
+        <span className="inline-block w-3 h-3 ml-1 text-slate-300 hover:text-slate-400 transition-colors">
+          ↕
+        </span>
+      );
+    }
+    return (
+      <span className={`inline-block w-3 h-3 ml-1 transition-colors ${
+        sortDirection === 'asc' ? 'text-purple-600' : 'text-purple-600'
+      }`}>
+        {sortDirection === 'asc' ? '↑' : '↓'}
+      </span>
+    );
+  };
+
+  // Sortable header component
+  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+    <button
+      onClick={() => handleSort(field)}
+      className="flex items-center text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-purple-600 transition-colors group"
+    >
+      {children}
+      <SortArrow field={field} />
+    </button>
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -96,7 +140,7 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
     return account.name || 'Unknown';
   };
 
-  // Filter transactions
+  // Filter and sort transactions
   const filteredTransactions = useMemo(() => {
     let filtered = transactions;
     
@@ -116,8 +160,54 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
       );
     }
 
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: any, bValue: any;
+      
+      switch (sortField) {
+        case 'date':
+          aValue = new Date(a.date).getTime();
+          bValue = new Date(b.date).getTime();
+          break;
+        case 'description':
+          aValue = a.description.toLowerCase();
+          bValue = b.description.toLowerCase();
+          break;
+        case 'amount':
+          aValue = Math.abs(a.amount);
+          bValue = Math.abs(b.amount);
+          break;
+        case 'category':
+          aValue = (a.category || '').toLowerCase();
+          bValue = (b.category || '').toLowerCase();
+          break;
+        case 'account':
+          aValue = (a.accountCode || '').toLowerCase();
+          bValue = (b.accountCode || '').toLowerCase();
+          break;
+        case 'confidence':
+          aValue = a.confidence ?? 0;
+          bValue = b.confidence ?? 0;
+          break;
+        case 'status':
+          aValue = a.isApproved ? 1 : 0;
+          bValue = b.isApproved ? 1 : 0;
+          break;
+        case 'feedback':
+          aValue = a.feedback ? 1 : 0;
+          bValue = b.feedback ? 1 : 0;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
     return filtered;
-  }, [transactions, filter, searchTerm]);
+  }, [transactions, filter, searchTerm, sortField, sortDirection]);
 
   // Smart selection functions
   const handleSmartSelect = (criteria: string) => {
@@ -635,39 +725,41 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
                   />
                 </th>
                 <th className="px-8 py-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Date
+                  <SortableHeader field="date">Date</SortableHeader>
                 </th>
                 <th className="px-8 py-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Description
+                  <SortableHeader field="description">Description</SortableHeader>
                 </th>
                 <th className="px-8 py-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  <div className="flex items-center space-x-1">
-                    <span>Amount</span>
-                    <div className="flex items-center space-x-1 text-xs">
-                      <span className="text-green-600">●</span>
-                      <span className="text-slate-400">in</span>
-                      <span className="text-red-600">●</span>
-                      <span className="text-slate-400">out</span>
+                  <SortableHeader field="amount">
+                    <div className="flex items-center space-x-1">
+                      <span>Amount</span>
+                      <div className="flex items-center space-x-1 text-xs">
+                        <span className="text-green-600">●</span>
+                        <span className="text-slate-400">in</span>
+                        <span className="text-red-600">●</span>
+                        <span className="text-slate-400">out</span>
+                      </div>
+                      <span className="text-xs text-slate-400" title="Green = Inflow/Income, Red = Outflow/Expense">
+                        💡
+                      </span>
                     </div>
-                    <span className="text-xs text-slate-400" title="Green = Inflow/Income, Red = Outflow/Expense">
-                      💡
-                    </span>
-                  </div>
+                  </SortableHeader>
                 </th>
                 <th className="px-8 py-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Category
+                  <SortableHeader field="category">Category</SortableHeader>
                 </th>
                 <th className="px-8 py-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Account
+                  <SortableHeader field="account">Account</SortableHeader>
                 </th>
                 <th className="px-8 py-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Confidence
+                  <SortableHeader field="confidence">Confidence</SortableHeader>
                 </th>
                 <th className="px-8 py-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Status
-                  </th>
+                  <SortableHeader field="status">Status</SortableHeader>
+                </th>
                 <th className="px-8 py-6 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Feedback
+                  <SortableHeader field="feedback">Feedback</SortableHeader>
                 </th>
               </tr>
             </thead>

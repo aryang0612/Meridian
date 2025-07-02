@@ -178,6 +178,11 @@ export class AIEngine {
    */
   private loadLearnedData(): void {
     try {
+      // Only run on client side
+      if (typeof window === 'undefined') {
+        return;
+      }
+
       // Load user corrections
       const savedCorrections = localStorage.getItem('meridian_user_corrections');
       if (savedCorrections) {
@@ -214,6 +219,11 @@ export class AIEngine {
    */
   private saveLearnedData(): void {
     try {
+      // Only run on client side
+      if (typeof window === 'undefined') {
+        return;
+      }
+
       // Save user corrections
       const correctionsObj = Object.fromEntries(this.userCorrections);
       localStorage.setItem('meridian_user_corrections', JSON.stringify(correctionsObj));
