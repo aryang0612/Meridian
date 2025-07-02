@@ -184,9 +184,23 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
       );
       
       if (shouldApply) {
+        // Apply updates to similar transactions
         similarTransactions.forEach(t => {
           onTransactionUpdate(t.id, updates);
         });
+
+        // Learn from this action for future uploads
+        if (aiEngine && updates.category) {
+          const similarDescriptions = similarTransactions.map(t => t.description);
+          aiEngine.learnFromSimilarAction(
+            sourceTransaction.description,
+            updates.category,
+            similarDescriptions,
+            updates.accountCode
+          );
+        }
+
+        console.log(`🔄 Applied categorization to ${similarTransactions.length} similar transactions and learned for future uploads`);
       }
     }
   };

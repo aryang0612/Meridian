@@ -158,9 +158,12 @@ export class AIEngine {
   private chartOfAccounts: ChartOfAccounts;
   private userCorrections: Map<string, string> = new Map();
   private categoryUsage: Map<string, number> = new Map();
+  private learnedPatterns: Map<string, { category: string; confidence: number; usageCount: number; lastUsed: Date }> = new Map();
+  private similarTransactionRules: Map<string, { pattern: string; category: string; accountCode?: string; confidence: number; usageCount: number }> = new Map();
 
   constructor(province: string = 'ON') {
     this.chartOfAccounts = new ChartOfAccounts(province);
+    this.loadLearnedData();
   }
 
   /**
@@ -168,6 +171,65 @@ export class AIEngine {
    */
   async initialize(): Promise<void> {
     await this.chartOfAccounts.waitForInitialization();
+  }
+
+  /**
+   * Load learned data from localStorage
+   */
+  private loadLearnedData(): void {
+    try {
+      // Load user corrections
+      const savedCorrections = localStorage.getItem('meridian_user_corrections');
+      if (savedCorrections) {
+        const corrections = JSON.parse(savedCorrections);
+        this.userCorrections = new Map(Object.entries(corrections));
+      }
+
+      // Load learned patterns
+      const savedPatterns = localStorage.getItem('meridian_learned_patterns');
+      if (savedPatterns) {
+        const patterns = JSON.parse(savedPatterns);
+        this.learnedPatterns = new Map(Object.entries(patterns));
+      }
+
+      // Load similar transaction rules (from cycle emoji actions)
+      const savedRules = localStorage.getItem('meridian_similar_rules');
+      if (savedRules) {
+        const rules = JSON.parse(savedRules);
+        this.similarTransactionRules = new Map(Object.entries(rules));
+      }
+
+      console.log('🧠 Loaded learned data:', {
+        corrections: this.userCorrections.size,
+        patterns: this.learnedPatterns.size,
+        rules: this.similarTransactionRules.size
+      });
+    } catch (error) {
+      console.warn('⚠️ Error loading learned data:', error);
+    }
+  }
+
+  /**
+   * Save learned data to localStorage
+   */
+  private saveLearnedData(): void {
+    try {
+      // Save user corrections
+      const correctionsObj = Object.fromEntries(this.userCorrections);
+      localStorage.setItem('meridian_user_corrections', JSON.stringify(correctionsObj));
+
+      // Save learned patterns
+      const patternsObj = Object.fromEntries(this.learnedPatterns);
+      localStorage.setItem('meridian_learned_patterns', JSON.stringify(patternsObj));
+
+      // Save similar transaction rules
+      const rulesObj = Object.fromEntries(this.similarTransactionRules);
+      localStorage.setItem('meridian_similar_rules', JSON.stringify(rulesObj));
+
+      console.log('💾 Saved learned data');
+    } catch (error) {
+      console.warn('⚠️ Error saving learned data:', error);
+    }
   }
 
   /**
@@ -184,6 +246,42 @@ export class AIEngine {
     const isPositive = transaction.amount > 0;
 
     console.log(`🔍 Categorizing: "${description}" (${transaction.amount})`);
+
+    // 1. Check learned patterns first (highest priority)
+    const learnedMatch = this.findLearnedPattern(description);
+    if (learnedMatch) {
+      console.log(`🧠 Learned pattern match: ${learnedMatch.category} (${learnedMatch.confidence}%)`);
+      return {
+        category: learnedMatch.category,
+        confidence: learnedMatch.confidence,
+        accountCode: learnedMatch.accountCode || this.getAccountCode(learnedMatch.category, amount),
+        inflowOutflow: getInflowOutflow(transaction, learnedMatch.category)
+      };
+    }
+
+    // 2. Check user corrections
+    const userCorrection = this.userCorrections.get(description.toLowerCase());
+    if (userCorrection) {
+      console.log(`👤 User correction applied: ${userCorrection}`);
+      return {
+        category: userCorrection,
+        confidence: 95,
+        accountCode: this.getAccountCode(userCorrection, amount),
+        inflowOutflow: getInflowOutflow(transaction, userCorrection)
+      };
+    }
+
+    // 3. Check similar transaction rules (from cycle emoji actions)
+    const similarRule = this.findSimilarTransactionRule(description);
+    if (similarRule) {
+      console.log(`🔄 Similar transaction rule: ${similarRule.category} (${similarRule.confidence}%)`);
+      return {
+        category: similarRule.category,
+        confidence: similarRule.confidence,
+        accountCode: similarRule.accountCode || this.getAccountCode(similarRule.category, amount),
+        inflowOutflow: getInflowOutflow(transaction, similarRule.category)
+      };
+    }
 
     // Special handling for E-TRANSFER based on amount
     if (/e[\-\s]*transfer(?!\s*fee)/i.test(description.toLowerCase())) {
@@ -487,6 +585,111 @@ export class AIEngine {
     const key = originalDescription.toLowerCase();
     this.userCorrections.set(key, correctedCategory);
     this.incrementCategoryUsage(correctedCategory);
+    console.log(`📝 Recorded user correction: "${originalDescription}" -> "${correctedCategory}"`);
+    this.saveLearnedData();
+  }
+
+  /**
+   * Learn from cycle emoji action (apply to similar transactions)
+   */
+  learnFromSimilarAction(sourceDescription: string, category: string, similarTransactions: string[], accountCode?: string) {
+    // Create a pattern from the source description
+    const pattern = this.createPatternFromDescription(sourceDescription);
+    
+    // Store the rule
+    const ruleKey = pattern;
+    const existingRule = this.similarTransactionRules.get(ruleKey);
+    
+    if (existingRule) {
+      // Update existing rule
+      existingRule.usageCount += similarTransactions.length;
+      existingRule.confidence = Math.min(95, existingRule.confidence + 5);
+    } else {
+      // Create new rule
+      this.similarTransactionRules.set(ruleKey, {
+        pattern,
+        category,
+        accountCode,
+        confidence: 85,
+        usageCount: similarTransactions.length
+      });
+    }
+
+    // Also learn individual patterns for each similar transaction
+    similarTransactions.forEach(desc => {
+      const individualPattern = this.createPatternFromDescription(desc);
+      this.learnedPatterns.set(individualPattern, {
+        category,
+        confidence: 90,
+        usageCount: 1,
+        lastUsed: new Date()
+      });
+    });
+
+    console.log(`🔄 Learned from similar action: ${similarTransactions.length} transactions -> ${category}`);
+    this.saveLearnedData();
+  }
+
+  /**
+   * Create a pattern from a description for learning
+   */
+  private createPatternFromDescription(description: string): string {
+    // Normalize the description for pattern matching
+    return description
+      .toLowerCase()
+      .replace(/\d+/g, '#') // Replace numbers with #
+      .replace(/[^\w\s#]/g, '') // Remove special characters
+      .trim();
+  }
+
+  /**
+   * Find learned pattern match
+   */
+  private findLearnedPattern(description: string): { category: string; confidence: number; accountCode?: string } | null {
+    const normalizedDesc = this.createPatternFromDescription(description);
+    
+    // Check for exact matches first
+    for (const [pattern, data] of this.learnedPatterns) {
+      if (pattern === normalizedDesc) {
+        return {
+          category: data.category,
+          confidence: data.confidence,
+          accountCode: undefined
+        };
+      }
+    }
+
+    // Check for partial matches
+    for (const [pattern, data] of this.learnedPatterns) {
+      if (normalizedDesc.includes(pattern) || pattern.includes(normalizedDesc)) {
+        return {
+          category: data.category,
+          confidence: Math.max(70, data.confidence - 10),
+          accountCode: undefined
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Find similar transaction rule match
+   */
+  private findSimilarTransactionRule(description: string): { category: string; confidence: number; accountCode?: string } | null {
+    const normalizedDesc = this.createPatternFromDescription(description);
+    
+    for (const [pattern, rule] of this.similarTransactionRules) {
+      if (normalizedDesc.includes(pattern) || pattern.includes(normalizedDesc)) {
+        return {
+          category: rule.category,
+          confidence: rule.confidence,
+          accountCode: rule.accountCode
+        };
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -522,6 +725,26 @@ export class AIEngine {
     return {
       totalPatterns: BANK_PATTERNS.length,
       categories
+    };
+  }
+
+  /**
+   * Get learning statistics
+   */
+  getLearningStats(): {
+    userCorrections: number;
+    learnedPatterns: number;
+    similarRules: number;
+    totalUsage: number;
+  } {
+    const totalUsage = Array.from(this.similarTransactionRules.values())
+      .reduce((sum, rule) => sum + rule.usageCount, 0);
+
+    return {
+      userCorrections: this.userCorrections.size,
+      learnedPatterns: this.learnedPatterns.size,
+      similarRules: this.similarTransactionRules.size,
+      totalUsage
     };
   }
 
