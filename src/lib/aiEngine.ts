@@ -65,8 +65,12 @@ const BANK_PATTERNS = [
   { pattern: /santander\s*consumer/i, category: 'Bank Related', subcategory: 'Loan Payments', confidence: 95 },
 
   // Payroll
-  { pattern: /payroll\s*pay/i, category: 'Bank Related', subcategory: 'Payroll', confidence: 95 },
-  { pattern: /payroll\s*deposit/i, category: 'Bank Related', subcategory: 'Payroll', confidence: 95 },
+  { pattern: /payroll\s*pay/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 95 },
+  { pattern: /payroll\s*deposit/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 95 },
+  { pattern: /payroll/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 90 },
+  { pattern: /employee\s*wages/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 95 },
+  { pattern: /salary/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 90 },
+  { pattern: /wages/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 90 },
 
   // Special Fees
   { pattern: /foreign\s*exchange\s*fee/i, category: 'Bank Fees', subcategory: 'Special Fees', confidence: 95 },
@@ -106,7 +110,11 @@ const BANK_PATTERNS = [
   { pattern: /debit\s*memo/i, category: 'Bank Related', subcategory: 'Other Bank', confidence: 95 },
 
   // BT Records Specific Patterns (NEW)
-  { pattern: /chq#\d+/i, category: 'General Expenses', subcategory: 'Cheques', confidence: 95 },
+  { pattern: /chq#\d+/i, category: 'Cheques', subcategory: 'Cheques', confidence: 95 },
+  { pattern: /cheque\s*#\d+/i, category: 'Cheques', subcategory: 'Cheques', confidence: 95 },
+  { pattern: /check\s*#\d+/i, category: 'Cheques', subcategory: 'Cheques', confidence: 95 },
+  { pattern: /^cheque$/i, category: 'Cheques', subcategory: 'Cheques', confidence: 90 },
+  { pattern: /^check$/i, category: 'Cheques', subcategory: 'Cheques', confidence: 90 },
   { pattern: /iol\s*serviceontario/i, category: 'General Expenses', subcategory: 'Government Services', confidence: 95 },
   { pattern: /iol\s*pay\s*to:\s*cra/i, category: 'Tax Payments', subcategory: 'CRA Payments', confidence: 95 },
   { pattern: /stripe\s*msp/i, category: 'Revenue', subcategory: 'Payment Processing', confidence: 95 },

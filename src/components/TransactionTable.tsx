@@ -5,6 +5,7 @@ import { Transaction } from '../lib/types';
 import { getMerchantCategories } from '../data/merchants';
 import { ChartOfAccounts } from '../lib/chartOfAccounts';
 import { AIEngine } from '../lib/aiEngine';
+import BulkCategorySelector from './BulkCategorySelector';
 
 interface Props {
   transactions: Transaction[];
@@ -24,6 +25,7 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showSmartSelect, setShowSmartSelect] = useState(false);
+  const [showBulkSelector, setShowBulkSelector] = useState(false);
   const [chartInitialized, setChartInitialized] = useState(false);
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -110,6 +112,8 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
       'Medical Expenses',
       'Insurance',
       'E-Transfer',
+      'Payroll',
+      'Cheques',
       'Uncategorized'
     ];
     return [...new Set([...merchantCategories, ...additionalCategories])].sort();
@@ -169,6 +173,8 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
     // Zero-rated or exempt categories
     const zeroRatedCategories = [
       'E-Transfer',
+      'Payroll',
+      'Cheques',
       'Bank Fees',
       'Interest Income',
       'Investment Income',
@@ -503,6 +509,19 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
     setShowBulkActions(false);
   };
 
+  const handleBulkUpdate = (updates: { id: string; accountCode: string; category: string; subcategory: string }[]) => {
+    updates.forEach(({ id, accountCode, category, subcategory }) => {
+      onTransactionUpdate(id, {
+        category,
+        subcategory,
+        accountCode,
+        confidence: 95,
+        isManuallyEdited: true
+      });
+    });
+    setShowBulkSelector(false);
+  };
+
   const handleAutoApproveHighConfidence = () => {
     const highConfidenceTransactions = filteredTransactions.filter(t => 
       (t.confidence ?? 0) >= 90 && t.category && t.accountCode && !t.isApproved
@@ -756,6 +775,12 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
                   >
                     📝 Mark as Manually Reviewed
                   </button>
+                  <button
+                    onClick={() => setShowBulkSelector(true)}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 hover:scale-105 transition-all duration-300 font-medium shadow-lg shadow-blue-500/25"
+                  >
+                    🎯 Bulk Category Assignment
+                  </button>
                 </div>
               </div>
             </div>
@@ -821,11 +846,13 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
             </thead>
             <tbody className="bg-white">
               {filteredTransactions.map((transaction, index) => {
-                // Special styling for E-Transfer transactions
+                // Special styling for E-Transfer and Cheque transactions
                 const isETransfer = transaction.category === 'E-Transfer';
+                const isCheque = transaction.category === 'Cheques';
+                const needsManualAssignment = isETransfer || isCheque;
                 const rowClasses = `hover:bg-slate-50 transition-colors ${
                   index !== filteredTransactions.length - 1 ? 'border-b border-slate-100' : ''
-                } ${isETransfer ? 'bg-yellow-50 hover:bg-yellow-100' : ''}`;
+                } ${needsManualAssignment ? 'bg-yellow-50 hover:bg-yellow-100' : ''}`;
                 
                 return (
                 <tr key={transaction.id} className={rowClasses}>
@@ -856,13 +883,24 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
                       </div>
                     )}
                   </td>
-                  <td className={`px-8 py-6 whitespace-nowrap text-sm font-semibold ${transaction.amount >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-                    <div className="flex items-center space-x-1">
-                      <span className={transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        {transaction.amount >= 0 ? '↗' : '↘'}
-                      </span>
-                      <span className={transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        ${Math.abs(transaction.amount).toFixed(2)}
+                  <td className="px-8 py-6 whitespace-nowrap text-sm font-semibold">
+                    <div className="flex items-center justify-center">
+                      <span
+                        className={`inline-flex items-center px-4 py-2 rounded-full shadow border transition-all duration-200 cursor-default select-none
+                          ${transaction.amount >= 0
+                            ? 'bg-green-100 border-green-300 text-green-700 hover:bg-green-200 hover:shadow-lg'
+                            : 'bg-red-100 border-red-300 text-red-700 hover:bg-red-200 hover:shadow-lg'}
+                        `}
+                        style={{ fontWeight: 600, fontSize: '1.1rem', minWidth: '120px', justifyContent: 'center' }}
+                        title={transaction.amount >= 0 ? 'Inflow' : 'Outflow'}
+                      >
+                        <span className={`mr-2 text-xl font-bold ${transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                              style={{ fontSize: '1.4em', lineHeight: 1 }}>
+                          {transaction.amount >= 0 ? '↗' : '↘'}
+                        </span>
+                        <span className="tabular-nums">
+                          ${Math.abs(transaction.amount).toFixed(2)}
+                        </span>
                       </span>
                     </div>
                   </td>
@@ -959,10 +997,10 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
                         }}
                         autoFocus
                         className={`w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
-                          isETransfer ? 'bg-yellow-50 border border-yellow-200' : 'bg-slate-50'
+                          needsManualAssignment ? 'bg-yellow-50 border border-yellow-200' : 'bg-slate-50'
                         }`}
                       >
-                        <option value="">{isETransfer ? 'Select account for E-Transfer...' : 'Select account...'}</option>
+                        <option value="">{needsManualAssignment ? `Select account for ${isETransfer ? 'E-Transfer' : 'Cheque'}...` : 'Select account...'}</option>
                         {accounts.map((acc) => (
                           <option key={acc.code} value={acc.code}>
                             {acc.code} - {acc.name}
@@ -976,7 +1014,7 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
                           setEditingField('account');
                         }}
                         className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          isETransfer && !transaction.accountCode
+                          needsManualAssignment && !transaction.accountCode
                             ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-yellow-300'
                             : transaction.accountCode
                             ? 'bg-slate-100 text-slate-900 hover:bg-slate-200'
@@ -985,9 +1023,9 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
                       >
                         {transaction.accountCode ? 
                           `${transaction.accountCode} - ${getAccountName(transaction.accountCode)}` :
-                          isETransfer ? 'Set E-Transfer Account' : 'No Account'
+                          needsManualAssignment ? `Set ${isETransfer ? 'E-Transfer' : 'Cheque'} Account` : 'No Account'
                         }
-                        {isETransfer && !transaction.accountCode && (
+                        {needsManualAssignment && !transaction.accountCode && (
                           <div className="text-xs text-yellow-600 mt-1">
                             Manual assignment required
                           </div>
@@ -1101,8 +1139,18 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
             • {selectedTransactions.size} selected
           </span>
         )}
-        </div>
-        </div>
+      </div>
+
+      {/* Bulk Category Selector Modal */}
+      {showBulkSelector && (
+        <BulkCategorySelector
+          transactions={transactions}
+          onBulkUpdate={handleBulkUpdate}
+          onClose={() => setShowBulkSelector(false)}
+          province={province}
+        />
+      )}
+    </div>
   );
 } 
 

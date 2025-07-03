@@ -40,7 +40,13 @@ export class ChartOfAccounts {
    * Client-side: Load CSV data for a province and initialize accounts
    */
   public loadFromCSV(province: string, csvText: string) {
+    console.log(`🔄 Loading CSV data for province: ${province}`);
+    console.log(`📄 CSV text length: ${csvText.length} characters`);
+    console.log(`📄 First 200 characters: ${csvText.substring(0, 200)}`);
+    
     const accounts = this.parseCSV(csvText);
+    console.log(`📊 Parsed ${accounts.length} accounts from CSV`);
+    
     this.csvData.set(province, accounts);
     if (province === this.currentProvince) {
       this.initializeAccountsFromCSV();
@@ -51,11 +57,15 @@ export class ChartOfAccounts {
 
   private parseCSV(csvText: string): CSVAccount[] {
     const lines = csvText.trim().split('\n');
+    console.log(`📄 CSV has ${lines.length} lines`);
+    console.log(`📄 Headers: ${lines[0]}`);
+    
     const headers = lines[0].split(',');
     const accounts: CSVAccount[] = [];
 
     for (let i = 1; i < lines.length; i++) {
       const values = this.parseCSVLine(lines[i]);
+      console.log(`📄 Line ${i}: ${lines[i].substring(0, 100)}... -> ${values.length} values`);
       if (values.length >= 5) {
         accounts.push({
           Name: values[0],
@@ -64,6 +74,8 @@ export class ChartOfAccounts {
           'Tax Code': values[3],
           Description: values[4]
         });
+      } else {
+        console.warn(`⚠️ Line ${i} has insufficient values: ${values.length} < 5`);
       }
     }
 

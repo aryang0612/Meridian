@@ -5,7 +5,16 @@ import { AIEngine } from './aiEngine';
 import { detectDuplicates, DuplicateDetectionResult } from './duplicateDetector';
 
 // Enhanced header formatting patterns
-const HEADER_PATTERNS = {
+const HEADER_PATTERNS: {
+  date: string[];
+  description: string[];
+  amount: string[];
+  balance: string[];
+  reference: string[];
+  category: string[];
+  debit?: string[];
+  credit?: string[];
+} = {
   date: [
     'date', 'transaction date', 'posting date', 'value date', 'effective date',
     'date posted', 'date processed', 'transaction date', 'post date',
@@ -40,6 +49,31 @@ const HEADER_PATTERNS = {
     'transaction type', 'activity type', 'category code', 'account type'
   ]
 };
+
+// Add new header patterns for more banks and international formats
+const ADDITIONAL_HEADER_PATTERNS = {
+  date: [
+    'transaction date', 'date of transaction', 'operation date', 'booking date', 'datum', 'fecha', 'data', 'transaktionsdatum', 'valuta', 'trans date', 'fecha de operacion'
+  ],
+  description: [
+    'transaction text', 'concept', 'particulars', 'operation', 'operation details', 'concepto', 'causale', 'bezeichnung', 'omschrijving', 'beskrivelse', 'keterangan', 'detalles', 'particular', 'transaktionsbeschreibung'
+  ],
+  debit: [
+    'debit', 'withdrawal', 'debit amount', 'amount debited', 'debit value', 'debit column', 'debit (out)', 'debit side', 'debitos', 'addebito', 'abbuchung', 'debito', 'debito (uscita)'
+  ],
+  credit: [
+    'credit', 'deposit', 'credit amount', 'amount credited', 'credit value', 'credit column', 'credit (in)', 'credit side', 'creditos', 'accredito', 'gutschrift', 'credito', 'credito (entrata)'
+  ]
+};
+
+// Merge with existing HEADER_PATTERNS
+Object.keys(ADDITIONAL_HEADER_PATTERNS).forEach(type => {
+  if ((HEADER_PATTERNS as any)[type]) {
+    (HEADER_PATTERNS as any)[type].push(...(ADDITIONAL_HEADER_PATTERNS as any)[type]);
+  } else {
+    (HEADER_PATTERNS as any)[type] = [...(ADDITIONAL_HEADER_PATTERNS as any)[type]];
+  }
+});
 
 // Header normalization and formatting options
 const HEADER_FORMATTING_OPTIONS = {

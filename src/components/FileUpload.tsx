@@ -1,8 +1,9 @@
 'use client';
 import React, { useState, useCallback } from 'react';
 import { CSVProcessor } from '../lib/csvProcessor';
+import { PDFProcessor } from '../lib/pdfProcessor';
 import { ValidationResult, Transaction, BankFormat, DuplicateDetectionResult } from '../lib/types';
-import { Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, File } from 'lucide-react';
 import { useFinancialData } from '../context/FinancialDataContext';
 import { categorizeAccountType } from '../lib/reportGenerator';
 
@@ -22,9 +23,11 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [processingStep, setProcessingStep] = useState<string>('');
 
   const { setFinancialData, setIsSample } = useFinancialData();
   const csvProcessor = new CSVProcessor();
+  const pdfProcessor = typeof window !== 'undefined' ? new PDFProcessor() : null;
 
   // Helper to map uploaded transactions to report Transaction type
   function mapToReportTransaction(tx: any): import('../lib/reportGenerator').Transaction {
@@ -52,8 +55,10 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
   }
 
   const processFile = useCallback(async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      onError('Please upload a CSV file only');
+    const fileExtension = file.name.toLowerCase().split('.').pop();
+    
+    if (!fileExtension || (fileExtension !== 'csv' && fileExtension !== 'pdf')) {
+      onError('Please upload a CSV or PDF file only');
       return;
     }
 
@@ -61,7 +66,32 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
     setUploadedFile(file);
     
     try {
-      const result = await csvProcessor.parseAndCategorizeCSV(file);
+      let result;
+      
+      if (fileExtension === 'pdf') {
+        if (!pdfProcessor) {
+          throw new Error('PDF processing is not available in this environment');
+        }
+        
+        setProcessingStep('Extracting text from PDF...');
+        const pdfResult = await pdfProcessor.convertPDFToCSV(file);
+        
+        if (!pdfResult.success) {
+          throw new Error(pdfResult.error || 'Failed to process PDF');
+        }
+        
+        setProcessingStep('Converting PDF to CSV format...');
+        // Create a CSV file from the extracted text
+        const csvBlob = new Blob([pdfResult.csvText], { type: 'text/csv' });
+        const csvFile = new (window as any).File([csvBlob], file.name.replace('.pdf', '.csv'), { type: 'text/csv' });
+        
+        setProcessingStep('Processing transactions...');
+        result = await csvProcessor.parseAndCategorizeCSV(csvFile);
+      } else {
+        setProcessingStep('Processing CSV file...');
+        result = await csvProcessor.parseAndCategorizeCSV(file);
+      }
+      
       // Map transactions for reports
       const reportTransactions = result.transactions.map(mapToReportTransaction);
       // Set context for reports
@@ -86,23 +116,23 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
       onError(error instanceof Error ? error.message : 'Failed to process file');
     } finally {
       setIsProcessing(false);
+      setProcessingStep('');
     }
-  }, [onFileProcessed, onError, csvProcessor, setFinancialData, setIsSample]);
+  }, [onFileProcessed, onError, csvProcessor, pdfProcessor, setFinancialData, setIsSample]);
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      processFile(file);
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      processMultipleFiles(Array.from(files));
     }
   }, [processFile]);
 
   const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragOver(false);
-    
-    const file = event.dataTransfer.files[0];
-    if (file) {
-      processFile(file);
+    const files = event.dataTransfer.files;
+    if (files && files.length > 0) {
+      processMultipleFiles(Array.from(files));
     }
   }, [processFile]);
 
@@ -115,6 +145,28 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
     event.preventDefault();
     setIsDragOver(false);
   }, []);
+
+  // Multi-file processing logic
+  const processMultipleFiles = useCallback(async (files: File[]) => {
+    setIsProcessing(true);
+    setUploadedFile(null);
+    setProcessingStep('Processing multiple files...');
+    let allTransactions: Transaction[] = [];
+    let allStats: any = { total: 0, categorized: 0, highConfidence: 0, needsReview: 0 };
+    let allValidation: ValidationResult | null = null;
+    let allBankFormats: (BankFormat | 'Unknown')[] = [];
+    let allDuplicateResults: DuplicateDetectionResult[] = [];
+    try {
+      for (const file of files) {
+        await processFile(file);
+        // The processFile function already updates context and calls onFileProcessed, so for true merging, you may want to refactor processFile to return results instead of calling onFileProcessed directly.
+        // For now, this will process each file individually as before, but you can refactor to merge results if needed.
+      }
+    } finally {
+      setIsProcessing(false);
+      setProcessingStep('');
+    }
+  }, [processFile]);
 
   return (
     <div className="space-y-8">
@@ -133,7 +185,8 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
       >
         <input
           type="file"
-          accept=".csv"
+          accept=".csv,.pdf"
+          multiple
           onChange={handleFileSelect}
           disabled={disabled || isProcessing}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
@@ -162,7 +215,7 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
             {isProcessing ? (
               <>
                 <p className="text-xl font-semibold text-slate-900">
-                  Processing your bank statement...
+                  {processingStep || 'Processing your bank statement...'}
                 </p>
                 <p className="text-slate-600 leading-relaxed">
                   Analyzing transactions and applying intelligent categorization
@@ -180,10 +233,10 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
             ) : (
               <>
                 <p className="text-xl font-semibold text-slate-900">
-                  Drop your CSV file here
+                  Drop your bank statement here
                 </p>
                 <p className="text-slate-600 leading-relaxed">
-                  Or click to browse and select your bank statement
+                  Or click to browse and select your CSV or PDF file
                 </p>
               </>
             )}
@@ -211,8 +264,41 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
             <FileText className="w-6 h-6 text-slate-600" />
           </div>
           <h3 className="text-xl font-semibold text-slate-900">
-            Supported Bank Formats
+            Supported File Formats
           </h3>
+        </div>
+        
+        {/* File Format Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="bg-white rounded-xl p-6 border border-slate-200 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300">
+            <div className="flex items-center space-x-4 mb-4">
+              <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
+                <FileText className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-slate-900">CSV Files</h4>
+                <p className="text-sm text-slate-500">Comma-separated values</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Direct export from your bank's online banking system. Most Canadian banks support CSV export.
+            </p>
+          </div>
+          
+          <div className="bg-white rounded-xl p-6 border border-slate-200 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300">
+            <div className="flex items-center space-x-4 mb-4">
+              <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center">
+                <File className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-slate-900">PDF Files</h4>
+                <p className="text-sm text-slate-500">Bank statement PDFs</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Upload your bank statement PDF directly. Our AI will extract and process the transaction data.
+            </p>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -241,10 +327,11 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
             <div>
               <h4 className="font-semibold text-slate-900 mb-2">File Requirements</h4>
               <ul className="text-sm text-slate-600 space-y-2 leading-relaxed">
-                <li>• CSV format with standard bank headers (Date, Description, Amount)</li>
+                <li>• CSV or PDF format with standard bank headers (Date, Description, Amount)</li>
                 <li>• File size should be under 10MB for optimal performance</li>
                 <li>• Transactions should include complete date and description information</li>
                 <li>• Multiple date formats supported (DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD)</li>
+                <li>• PDF files will be automatically converted to CSV format for processing</li>
               </ul>
             </div>
           </div>

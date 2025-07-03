@@ -43,9 +43,48 @@ const generateSampleData = (): FinancialData => {
   };
 };
 
+// Convert dashboard data to FinancialData format
+const convertDashboardToFinancialData = (contextData: any): FinancialData | null => {
+  // Check if we have uploaded transaction data in the dashboard
+  if (!contextData?.dashboard?.transactions || contextData.dashboard.transactions.length === 0) {
+    console.log('📊 No uploaded transaction data found in context');
+    return null;
+  }
+
+  const transactions = contextData.dashboard.transactions;
+  console.log('📊 Found uploaded transactions:', transactions.length);
+  
+  // Get date range from transactions
+  const dates = transactions.map((t: any) => new Date(t.date)).sort((a: Date, b: Date) => a.getTime() - b.getTime());
+  
+  return {
+    transactions: transactions.map((t: any) => ({
+      id: t.id,
+      date: new Date(t.date),
+      description: t.description,
+      amount: t.amount,
+      category: t.category,
+      accountCode: t.accountCode || '',
+      type: t.amount >= 0 ? 'income' : 'expense' // Determine type based on amount
+    })),
+    startDate: dates[0] || new Date(),
+    endDate: dates[dates.length - 1] || new Date(),
+    companyName: contextData.companyName || 'Your Business',
+    reportDate: new Date(),
+    province: contextData.dashboard.selectedProvince || 'ON'
+  };
+};
+
 export default function ReportsPage() {
   const { financialData: contextData, isSample, setIsSample } = useFinancialData();
-  const [reportGenerator] = useState(() => new ReportGenerator());
+  const [reportGenerator, setReportGenerator] = useState<ReportGenerator | null>(null);
+  
+  // Initialize ReportGenerator on client-side only
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !reportGenerator) {
+      setReportGenerator(new ReportGenerator());
+    }
+  }, [reportGenerator]);
   const [financialData, setFinancialData] = useState<FinancialData | null>(null);
   const [profitLossData, setProfitLossData] = useState<ProfitLossData | null>(null);
   const [balanceSheetData, setBalanceSheetData] = useState<BalanceSheetData | null>(null);
@@ -53,20 +92,40 @@ export default function ReportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState('ytd'); // ytd, q4, q3, q2, q1, custom
 
   useEffect(() => {
+    console.log('📊 Reports page useEffect triggered');
+    console.log('📊 Context data:', contextData);
+    
     let data: FinancialData;
-    if (contextData && contextData.transactions && contextData.transactions.length > 0) {
-      data = contextData;
+    
+    // Try to convert uploaded data first
+    const uploadedData = convertDashboardToFinancialData(contextData);
+    if (uploadedData) {
+      data = uploadedData;
       setIsSample(false);
+      console.log('📊 Using uploaded transaction data for reports:', data.transactions.length, 'transactions');
+      console.log('📊 Sample transactions:', data.transactions.slice(0, 3));
     } else {
       data = generateSampleData();
       setIsSample(true);
+      console.log('📊 Using sample data for reports demonstration');
     }
+    
     setFinancialData(data);
+    
     // Generate report data
-    const plData = reportGenerator.generateProfitLossData(data);
-    const bsData = reportGenerator.generateBalanceSheetData(data);
-    setProfitLossData(plData);
-    setBalanceSheetData(bsData);
+    if (reportGenerator) {
+      try {
+        console.log('📊 Generating reports with data:', data);
+        const plData = reportGenerator.generateProfitLossData(data);
+        const bsData = reportGenerator.generateBalanceSheetData(data);
+        setProfitLossData(plData);
+        setBalanceSheetData(bsData);
+        console.log('✅ Reports generated successfully');
+        console.log('📊 P&L Data:', plData);
+      } catch (error) {
+        console.error('❌ Error generating reports:', error);
+      }
+    }
   }, [contextData, reportGenerator, setIsSample]);
 
   const formatCurrency = (amount: number): string => {
@@ -78,7 +137,7 @@ export default function ReportsPage() {
   };
 
   const handleGeneratePDF = async (reportType: 'profit-loss' | 'balance-sheet') => {
-    if (!financialData) return;
+    if (!financialData || !reportGenerator) return;
     
     setIsGenerating(true);
     
@@ -116,7 +175,7 @@ export default function ReportsPage() {
   };
 
   // Add a flag to determine if a real file is selected (not just sample data)
-  const isFileSelected = financialData && financialData.transactions && financialData.transactions.length > 0 && financialData.companyName !== 'Sample Business Ltd.' && !isSample;
+  const isFileSelected = !isSample && financialData && financialData.transactions && financialData.transactions.length > 0;
 
   return (
     <div className="min-h-screen">
