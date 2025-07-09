@@ -371,7 +371,7 @@ export default function HelpPage() {
                         
                         <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                           <h5 className="font-semibold text-yellow-900 mb-2">Additional Supported Institutions</h5>
-                          <p className="text-yellow-800 text-sm">National Bank, Desjardins, Tangerine, PC Financial, and most Canadian credit unions. If your bank isn't listed, contact support.</p>
+                          <p className="text-yellow-800 text-sm">National Bank, Desjardins, Tangerine, PC Financial, and most Canadian credit unions. If your bank isn&apos;t listed, contact support.</p>
                         </div>
                       </div>
                     </div>
@@ -496,7 +496,7 @@ export default function HelpPage() {
                               <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              Do's
+                              Do&apos;s
                             </h4>
                             <ul className="space-y-3 text-slate-600">
                               <li className="flex items-start space-x-3">
@@ -527,28 +527,28 @@ export default function HelpPage() {
                               <svg className="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              Don'ts
+                              Don&apos;ts
                             </h4>
                             <ul className="space-y-3 text-slate-600">
                               <li className="flex items-start space-x-3">
                                 <span className="text-red-600 mt-1">✗</span>
-                                <span>Don't upload files with missing or corrupted data</span>
+                                <span>Don&apos;t upload files with missing or corrupted data</span>
                               </li>
                               <li className="flex items-start space-x-3">
                                 <span className="text-red-600 mt-1">✗</span>
-                                <span>Don't ignore AI categorization suggestions without review</span>
+                                <span>Don&apos;t ignore AI categorization suggestions without review</span>
                               </li>
                               <li className="flex items-start space-x-3">
                                 <span className="text-red-600 mt-1">✗</span>
-                                <span>Don't mix personal and business transactions</span>
+                                <span>Don&apos;t mix personal and business transactions</span>
                               </li>
                               <li className="flex items-start space-x-3">
                                 <span className="text-red-600 mt-1">✗</span>
-                                <span>Don't wait until year-end to process statements</span>
+                                <span>Don&apos;t wait until year-end to process statements</span>
                               </li>
                               <li className="flex items-start space-x-3">
                                 <span className="text-red-600 mt-1">✗</span>
-                                <span>Don't forget to backup your categorized data</span>
+                                <span>Don&apos;t forget to backup your categorized data</span>
                               </li>
                             </ul>
                           </div>
@@ -694,7 +694,7 @@ export default function HelpPage() {
                           </div>
                           <div className="bg-white rounded-2xl rounded-tl-sm p-3 shadow-sm max-w-xs border border-slate-100">
                             <p className="text-sm text-slate-800">
-                              Hi! 👋 I'm here to help you with Meridian AI. What can I assist you with today?
+                              Hi! 👋 I&apos;m here to help you with Meridian AI. What can I assist you with today?
                             </p>
                             <p className="text-xs text-slate-500 mt-1">Just now</p>
                           </div>
@@ -862,9 +862,16 @@ export default function HelpPage() {
               <div className="border-b border-slate-200 pb-6">
                 <h3 className="text-lg font-semibold text-slate-900 mb-3">How accurate is the AI categorization?</h3>
                 <p className="text-slate-600">
-                  Our AI engine achieves 95%+ accuracy on Canadian business transactions. It's trained on thousands 
-                  of real transactions and continuously learns from user feedback. You can always review and correct 
-                  any categorizations before exporting.
+                  Meridian AI uses machine learning to categorize your transactions with 95%+ accuracy. Here&apos;s how it works:
+                </p>
+                <ul className="list-disc list-inside text-slate-600 mt-2">
+                  <li className="text-slate-600 mb-2">🟢 <strong>High (90-100%)</strong> - AI is very confident, likely doesn&apos;t need review</li>
+                  <li className="text-slate-600 mb-2">🟡 <strong>Medium (70-89%)</strong> - AI is moderately confident, quick review recommended</li>
+                  <li className="text-slate-600 mb-2">🟠 <strong>Low (50-69%)</strong> - AI is uncertain, manual review recommended</li>
+                  <li className="text-slate-600 mb-2">🔴 <strong>Very Low (&lt;50%)</strong> - AI couldn&apos;t categorize, manual categorization needed</li>
+                </ul>
+                <p className="text-slate-600 mt-4">
+                  Don&apos;t worry - you can always review and correct any categorizations. The AI learns from your corrections to improve future accuracy.
                 </p>
               </div>
 
@@ -880,7 +887,7 @@ export default function HelpPage() {
                 <h3 className="text-lg font-semibold text-slate-900 mb-3">Is my financial data secure?</h3>
                 <p className="text-slate-600">
                   Absolutely. We use bank-level encryption, process data locally when possible, and never store 
-                  sensitive financial information permanently. All data transmission is encrypted and we're 
+                  sensitive financial information permanently. All data transmission is encrypted and we&apos;re 
                   SOC 2 Type II compliant.
                 </p>
               </div>
@@ -890,7 +897,7 @@ export default function HelpPage() {
                 <p className="text-slate-600">
                   We support CSV files from all major Canadian banks. Common formats include transaction exports 
                   from online banking, credit card statements, and business account downloads. If you have a 
-                  specific format that isn't working, contact our support team.
+                  specific format that isn&apos;t working, contact our support team.
                 </p>
               </div>
             </div>

@@ -52,9 +52,19 @@ const safeStorage = {
   get: (key: string) => {
     try {
       const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : null;
+      if (!item) return null;
+      
+      const parsed = JSON.parse(item);
+      return parsed;
     } catch (error) {
-      console.warn('Failed to load from localStorage:', error);
+      console.warn(`Failed to parse localStorage key "${key}":`, error);
+      // Clear corrupted data
+      try {
+        localStorage.removeItem(key);
+        console.log(`Cleared corrupted data for key: ${key}`);
+      } catch (clearError) {
+        console.warn('Failed to clear corrupted data:', clearError);
+      }
       return null;
     }
   },
@@ -101,6 +111,7 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
   // Load data from storage on mount (safe)
   useEffect(() => {
     try {
+      // Load existing data instead of clearing it
       const savedData = safeStorage.get(STORAGE_KEYS.FINANCIAL_DATA);
       const savedIsSample = safeStorage.get(STORAGE_KEYS.IS_SAMPLE);
       
@@ -112,8 +123,10 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
       if (savedIsSample !== null) {
         setIsSample(savedIsSample);
       }
+      
+      console.log('✅ App initialized with existing data');
     } catch (error) {
-      console.warn('Failed to load from storage:', error);
+      console.warn('Failed to load from localStorage:', error);
       // Continue with default state - no breaking
     }
   }, []);

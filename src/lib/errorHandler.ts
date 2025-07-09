@@ -72,6 +72,101 @@ export class ErrorHandler {
   }
 
   /**
+   * Handle AI categorization errors with recovery suggestions
+   */
+  static handleAIError(error: any, context: string = 'AI categorization'): string {
+    const message = error?.message || error?.toString() || 'Unknown AI error';
+    
+    // OpenAI API errors
+    if (message.includes('OpenAI API key')) {
+      return 'AI categorization unavailable: API key issue. The system will use local categorization instead.';
+    }
+    
+    if (message.includes('rate limit')) {
+      return 'AI categorization temporarily unavailable: Rate limit exceeded. Please try again in a few minutes.';
+    }
+    
+    if (message.includes('timeout')) {
+      return 'AI categorization timed out. This may happen with large files. Try breaking your file into smaller chunks.';
+    }
+    
+    if (message.includes('invalid request')) {
+      return 'AI categorization error: Invalid request format. The system will use local categorization instead.';
+    }
+    
+    // Network errors
+    if (message.includes('fetch failed') || message.includes('network')) {
+      return 'Network error during AI categorization. Please check your internet connection and try again.';
+    }
+    
+    // Batch processing errors
+    if (message.includes('batch processing')) {
+      return 'Error during batch AI categorization. Try reducing the number of transactions or categorizing them individually.';
+    }
+    
+    // Generic AI fallback
+    return `AI categorization error: ${message}. Manual categorization is still available.`;
+  }
+
+  /**
+   * Handle API errors with specific recovery actions
+   */
+  static handleAPIError(error: any, endpoint: string = 'API'): { message: string; canRetry: boolean; suggestedAction?: string } {
+    const message = error?.message || error?.toString() || 'Unknown API error';
+    
+    // Network errors
+    if (message.includes('fetch failed') || message.includes('network')) {
+      return {
+        message: 'Network connection error. Please check your internet connection.',
+        canRetry: true,
+        suggestedAction: 'Try again in a few seconds'
+      };
+    }
+    
+    // Server errors
+    if (message.includes('500') || message.includes('internal server')) {
+      return {
+        message: 'Server error. The system is temporarily unavailable.',
+        canRetry: true,
+        suggestedAction: 'Try again in a few minutes'
+      };
+    }
+    
+    // Authentication errors
+    if (message.includes('401') || message.includes('unauthorized')) {
+      return {
+        message: 'Authentication error. Please refresh the page and try again.',
+        canRetry: false,
+        suggestedAction: 'Refresh the page'
+      };
+    }
+    
+    // Rate limiting
+    if (message.includes('429') || message.includes('rate limit')) {
+      return {
+        message: 'Too many requests. Please wait a moment before trying again.',
+        canRetry: true,
+        suggestedAction: 'Wait 30 seconds and try again'
+      };
+    }
+    
+    // Validation errors
+    if (message.includes('400') || message.includes('bad request')) {
+      return {
+        message: 'Invalid request. Please check your input and try again.',
+        canRetry: false,
+        suggestedAction: 'Check your data format'
+      };
+    }
+    
+    return {
+      message: `${endpoint} error: ${message}`,
+      canRetry: true,
+      suggestedAction: 'Try again'
+    };
+  }
+
+  /**
    * Generate user-friendly validation messages
    */
   static formatValidationResult(validation: ValidationResult): string {
@@ -96,6 +191,41 @@ export class ErrorHandler {
     console.log('Error message:', error?.message);
     console.log('Error stack:', error?.stack);
     console.groupEnd();
+  }
+
+  /**
+   * Get recovery suggestions for common errors
+   */
+  static getRecoverySuggestions(errorType: string): string[] {
+    const suggestions: { [key: string]: string[] } = {
+      'csv_parsing': [
+        'Check that your CSV has proper headers (Date, Description, Amount)',
+        'Ensure the file uses comma separators',
+        'Verify dates are in a recognizable format (YYYY-MM-DD, MM/DD/YYYY)',
+        'Make sure amounts are numeric (remove currency symbols)',
+        'Try opening the file in Excel/Google Sheets to verify formatting'
+      ],
+      'ai_categorization': [
+        'Individual transactions can still be categorized manually',
+        'Try batch categorization with smaller groups',
+        'Check your internet connection',
+        'Manual categorization is available as a fallback'
+      ],
+      'file_upload': [
+        'Ensure file size is under 10MB',
+        'Use CSV format only (not Excel .xlsx)',
+        'Try refreshing the page if upload fails',
+        'Check that the file is not corrupted'
+      ],
+      'network': [
+        'Check your internet connection',
+        'Try refreshing the page',
+        'Wait a few minutes and try again',
+        'Contact support if the issue persists'
+      ]
+    };
+    
+    return suggestions[errorType] || ['Try refreshing the page', 'Contact support if the issue persists'];
   }
 
   /**

@@ -1,0 +1,12 @@
+Date,Description,Amount,Account Code,Confidence,Status
+2024-01-15,"MB-Bill payment Walmart Mastercard",-350,,0,Pending
+2024-01-15,"TD Visa Payment",-500,,0,Pending
+2024-01-15,"RBC Visa Payment",-750,,0,Pending
+2024-01-15,"Monthly Account Fee",-12.95,,0,Pending
+2024-01-15,"Service Charge",-4.5,,0,Pending
+2024-01-15,"ATM Withdrawal Fee",-3,,0,Pending
+2024-01-15,"Internal Transfer",-1000,,0,Pending
+2024-01-15,"Savings to Chequing",-500,,0,Pending
+2024-01-15,"CHQ123 to SAV456",-250,,0,Pending
+2024-01-15,"MB-Bill payment Bell Canada",-89.99,,0,Pending
+2024-01-15,"Bill Payment - Hydro",-125.5,,0,Pending

@@ -2,10 +2,12 @@
 import React, { useState, useCallback } from 'react';
 import { CSVProcessor } from '../lib/csvProcessor';
 import { PDFProcessor } from '../lib/pdfProcessor';
-import { ValidationResult, Transaction, BankFormat, DuplicateDetectionResult } from '../lib/types';
-import { Upload, FileText, CheckCircle, AlertCircle, File } from 'lucide-react';
+import { ValidationResult, Transaction, BankFormat } from '../lib/types';
+import { DuplicateDetectionResult } from '../lib/duplicateDetector';
+import { CommonIcons, AppIcons } from '../lib/iconSystem';
 import { useFinancialData } from '../context/FinancialDataContext';
 import { categorizeAccountType } from '../lib/reportGenerator';
+import { ProgressBar } from './ProgressBar';
 
 interface FileUploadProps {
   onFileProcessed: (data: {
@@ -15,7 +17,7 @@ interface FileUploadProps {
     duplicateResult?: DuplicateDetectionResult;
     stats: any;
   }) => void;
-  onError: (error: string) => void;
+  onError: (error: string, fileName?: string) => void;
   disabled: boolean;
 }
 
@@ -24,6 +26,7 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [processingStep, setProcessingStep] = useState<string>('');
+  const [progress, setProgress] = useState<number>(0);
 
   const { setFinancialData, setIsSample } = useFinancialData();
   const csvProcessor = new CSVProcessor();
@@ -58,12 +61,13 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
     const fileExtension = file.name.toLowerCase().split('.').pop();
     
     if (!fileExtension || (fileExtension !== 'csv' && fileExtension !== 'pdf')) {
-      onError('Please upload a CSV or PDF file only');
+      onError('Please upload a CSV or PDF file only', file.name);
       return;
     }
 
     setIsProcessing(true);
     setUploadedFile(file);
+    setProgress(0);
     
     try {
       let result;
@@ -86,13 +90,25 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
         const csvFile = new (window as any).File([csvBlob], file.name.replace('.pdf', '.csv'), { type: 'text/csv' });
         
         setProcessingStep('Processing transactions...');
-        result = await csvProcessor.parseAndCategorizeCSV(csvFile);
+        if (typeof csvProcessor.parseAndCategorizeCSV === 'function' && csvProcessor.parseAndCategorizeCSV.length > 1) {
+          result = await csvProcessor.parseAndCategorizeCSV(csvFile, setProgress);
+        } else {
+          result = await csvProcessor.parseAndCategorizeCSV(csvFile);
+        }
       } else {
         setProcessingStep('Processing CSV file...');
-        result = await csvProcessor.parseAndCategorizeCSV(file);
+        if (typeof csvProcessor.parseAndCategorizeCSV === 'function' && csvProcessor.parseAndCategorizeCSV.length > 1) {
+          result = await csvProcessor.parseAndCategorizeCSV(file, setProgress);
+        } else {
+          result = await csvProcessor.parseAndCategorizeCSV(file);
+        }
       }
       
       // Map transactions for reports
+      if (!result.transactions || result.transactions.length === 0) {
+        onError('No transactions found in file. Please check your headers and data.', file.name);
+        return;
+      }
       const reportTransactions = result.transactions.map(mapToReportTransaction);
       // Set context for reports
       let startDate = new Date();
@@ -110,13 +126,16 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
         reportDate: new Date(),
       });
       setIsSample(false);
-      onFileProcessed(result);
+      // Ensure correct type for bankFormat
+      const processedResult = { ...result, bankFormat: result.bankFormat as BankFormat | 'Unknown' };
+      onFileProcessed(processedResult);
     } catch (error) {
       console.error('File processing error:', error);
-      onError(error instanceof Error ? error.message : 'Failed to process file');
+      onError(error instanceof Error ? error.message : 'Failed to process file', file.name);
     } finally {
       setIsProcessing(false);
       setProcessingStep('');
+      setProgress(0);
     }
   }, [onFileProcessed, onError, csvProcessor, pdfProcessor, setFinancialData, setIsSample]);
 
@@ -125,6 +144,8 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
     if (files && files.length > 0) {
       processMultipleFiles(Array.from(files));
     }
+    // Reset the input value to allow re-uploading the same file
+    event.target.value = '';
   }, [processFile]);
 
   const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -148,28 +169,33 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
 
   // Multi-file processing logic
   const processMultipleFiles = useCallback(async (files: File[]) => {
-    setIsProcessing(true);
-    setUploadedFile(null);
-    setProcessingStep('Processing multiple files...');
-    let allTransactions: Transaction[] = [];
-    let allStats: any = { total: 0, categorized: 0, highConfidence: 0, needsReview: 0 };
-    let allValidation: ValidationResult | null = null;
-    let allBankFormats: (BankFormat | 'Unknown')[] = [];
-    let allDuplicateResults: DuplicateDetectionResult[] = [];
-    try {
-      for (const file of files) {
-        await processFile(file);
-        // The processFile function already updates context and calls onFileProcessed, so for true merging, you may want to refactor processFile to return results instead of calling onFileProcessed directly.
-        // For now, this will process each file individually as before, but you can refactor to merge results if needed.
+    if (files.length === 1) {
+      // Single file - use the regular processFile function
+      await processFile(files[0]);
+    } else {
+      // Multiple files
+      setIsProcessing(true);
+      setUploadedFile(null);
+      setProcessingStep('Processing multiple files...');
+      try {
+        for (const file of files) {
+          await processFile(file);
+        }
+      } finally {
+        setIsProcessing(false);
+        setProcessingStep('');
       }
-    } finally {
-      setIsProcessing(false);
-      setProcessingStep('');
     }
   }, [processFile]);
 
   return (
     <div className="space-y-8">
+      {/* Progress Bar */}
+      {isProcessing && progress > 0 && progress < 100 && (
+        <div className="mb-4">
+          <ProgressBar progress={progress} />
+        </div>
+      )}
       {/* Upload Area */}
       <div
         onDrop={handleDrop}
@@ -197,15 +223,15 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
           <div className="flex justify-center">
             {isProcessing ? (
               <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center">
-                <div className="w-6 h-6 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+                <CommonIcons.uploadProcessing.icon className={CommonIcons.uploadProcessing.className} />
               </div>
             ) : uploadedFile ? (
               <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center">
-                <CheckCircle className="w-8 h-8 text-green-600" />
+                <CommonIcons.uploadSuccess.icon className={CommonIcons.uploadSuccess.className} />
               </div>
             ) : (
               <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center group-hover:bg-purple-200 transition-colors duration-300">
-                <Upload className="w-8 h-8 text-purple-600" />
+                <CommonIcons.uploadIdle.icon className={CommonIcons.uploadIdle.className} />
               </div>
             )}
           </div>
@@ -224,7 +250,7 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
             ) : uploadedFile ? (
               <>
                 <p className="text-xl font-semibold text-slate-900">
-                  File uploaded successfully
+                  ✅ File processed successfully
                 </p>
                 <p className="text-slate-600 leading-relaxed">
                   {uploadedFile.name} • {(uploadedFile.size / 1024).toFixed(1)} KB
@@ -261,7 +287,7 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
       <div className="bg-slate-50 rounded-xl p-8">
         <div className="flex items-center space-x-4 mb-6">
           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
-            <FileText className="w-6 h-6 text-slate-600" />
+                            <AppIcons.files.file className="w-6 h-6 text-slate-600" />
           </div>
           <h3 className="text-xl font-semibold text-slate-900">
             Supported File Formats
@@ -273,7 +299,7 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
           <div className="bg-white rounded-xl p-6 border border-slate-200 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300">
             <div className="flex items-center space-x-4 mb-4">
               <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
-                <FileText className="w-6 h-6 text-green-600" />
+                <AppIcons.files.file className="w-6 h-6 text-green-600" />
               </div>
               <div>
                 <h4 className="font-semibold text-slate-900">CSV Files</h4>
@@ -281,14 +307,14 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
               </div>
             </div>
             <p className="text-sm text-slate-600 leading-relaxed">
-              Direct export from your bank's online banking system. Most Canadian banks support CSV export.
+              Direct export from your bank&apos;s online banking system. Most Canadian banks support CSV export.
             </p>
           </div>
           
           <div className="bg-white rounded-xl p-6 border border-slate-200 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300">
             <div className="flex items-center space-x-4 mb-4">
               <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center">
-                <File className="w-6 h-6 text-red-600" />
+                <AppIcons.files.document className="w-6 h-6 text-red-600" />
               </div>
               <div>
                 <h4 className="font-semibold text-slate-900">PDF Files</h4>
@@ -322,7 +348,7 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
         <div className="mt-8 p-6 bg-white rounded-xl border border-purple-100/50">
           <div className="flex items-start space-x-4">
             <div className="w-8 h-8 bg-purple-50 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
-              <AlertCircle className="w-5 h-5 text-purple-600" />
+                              <AppIcons.status.info className="w-5 h-5 text-purple-600" />
             </div>
             <div>
               <h4 className="font-semibold text-slate-900 mb-2">File Requirements</h4>

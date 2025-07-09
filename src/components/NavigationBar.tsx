@@ -1,6 +1,7 @@
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
+import { AppIcons, IconSizes, IconColors } from '../lib/iconSystem';
 
 interface NavigationBarProps {
   currentStep?: 'upload' | 'review' | 'export';
@@ -72,9 +73,7 @@ export default function NavigationBar({
                 onClick={onNewFile}
                 className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg font-medium hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transform hover:scale-105"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+                <AppIcons.actions.add className={IconSizes.sm} />
                 <span className="hidden sm:inline">New File</span>
               </button>
             )}
@@ -87,9 +86,7 @@ export default function NavigationBar({
 
             {/* Notifications */}
             <button className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM10.5 3.5L7 7h3v10l4-4h-3V3.5z" />
-              </svg>
+              <AppIcons.communication.notification className={IconSizes.md} />
               <div className="absolute top-1 right-1 w-2 h-2 bg-purple-500 rounded-full"></div>
             </button>
 
@@ -103,17 +100,13 @@ export default function NavigationBar({
                 <p className="text-xs text-slate-500">Business Owner</p>
               </div>
               <button className="text-slate-400 hover:text-slate-600 transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+                <AppIcons.navigation.expand className={IconSizes.sm} />
               </button>
             </div>
 
             {/* Mobile Menu Button */}
             <button className="md:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              <AppIcons.navigation.menu className={IconSizes.md} />
             </button>
           </div>
         </div>

@@ -10,6 +10,7 @@ export interface Transaction {
   confidence?: number;
   isApproved?: boolean;
   isManuallyEdited?: boolean;
+  aiCategorized?: boolean; // Track if transaction was categorized by AI
   merchant?: string;
   taxCode?: string;
   taxRate?: number; // Tax rate as percentage (e.g., 13 for 13%)
@@ -32,8 +33,7 @@ export interface Account {
 
 export interface MerchantPattern {
   pattern: RegExp;
-  category: string;
-  subcategory?: string;
+  accountCode: string;
   confidence: number;
   merchant: string;
 }
@@ -59,18 +59,7 @@ export interface CategorySuggestion {
   reasoning: string;
 }
 
-export interface DuplicateGroup {
-  originalIndex: number;
-  duplicateIndexes: number[];
-  transaction: Transaction;
-  confidence: number;
-}
-
-export interface DuplicateDetectionResult {
-  duplicateGroups: DuplicateGroup[];
-  cleanTransactions: Transaction[];
-  duplicateCount: number;
-}
+// Duplicate detection types moved to duplicateDetector.ts
 
 export type BankFormat = 
   | 'Generic' 

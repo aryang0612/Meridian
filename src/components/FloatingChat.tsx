@@ -83,7 +83,7 @@ export default function FloatingChat() {
         message = 'How do I get started with uploading my first bank statement?';
         break;
       case 'file-upload':
-        message = 'I\'m having trouble uploading my bank statement file. Can you help?';
+        message = 'I&apos;m having trouble uploading my bank statement file. Can you help?';
         break;
       case 'export-help':
         message = 'How do I export my transactions to Xero or QuickBooks?';
@@ -189,7 +189,7 @@ export default function FloatingChat() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
                 </div>
-                <p className="text-sm">Hi! I'm your AI assistant.</p>
+                <p className="text-sm">Hi! I&apos;m your AI assistant.</p>
                 <p className="text-xs mt-1">Ask me anything about Meridian AI!</p>
               </div>
             ) : (

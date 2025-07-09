@@ -1,0 +1,95 @@
+RBC BANK STATEMENT FORMAT TRAINING DATA
+==========================================
+
+FORMAT: RBC (Royal Bank of Canada) Personal Banking Statement
+BANK: Royal Bank of Canada
+ACCOUNT_TYPE: RBC AdvantageBanking
+
+STRUCTURE:
+- Header: Bank name, address, account number, statement period
+- Summary: Opening balance, total deposits, total withdrawals, closing balance
+- Transactions: Date, Description, Withdrawals ($), Deposits ($), Balance ($)
+
+SAMPLE DATA:
+Date,Description,Withdrawals ($),Deposits ($),Balance ($)
+Opening Balance,,,162.62
+11 Dec,Online Banking transfer - 1752,10.00,,
+11 Dec,Online Banking transfer - 2973,10.00,,
+11 Dec,Online Banking transfer - 5322,12.00,,
+11 Dec,Online Banking transfer - 5344,20.00,,
+11 Dec,Online Banking transfer - 7146,30.00,,244.62
+11 Dec,Contactless Interac purchase - 2614 AIR-SERV A PS,12.00,,
+11 Dec,Contactless Interac purchase - 5842 AIR-SERV A PS,12.00,,
+11 Dec,Contactless Interac purchase - 1949 TIM HORTONS #57,2.07,,
+11 Dec,Contactless Interac purchase - 6141 SOBEYS #68,45.26,,
+11 Dec,Contactless Interac purchase - 1732 TIM HORTONS #81,6.43,,
+11 Dec,Contactless Interac purchase - 3032 KS277 PLEASANT,7.00,,
+12 Dec,Online Banking transfer - 2608,9.00,,
+12 Dec,Online Banking transfer - 8125,10.00,,
+12 Dec,Online Banking transfer - 2949,50.00,,
+12 Dec,Visa Debit authorization expired - 8218 UBER CANADA/UBE,11.86,,
+12 Dec,Visa Debit correction - 4947 DAZN Limited,23.19,,57.02
+12 Dec,Misc Payment PNS PAYMENT,,600.00,
+12 Dec,Contactless Interac purchase - 3601 MCDONALD'S #406,2.30,,
+12 Dec,Contactless Interac purchase - 2101 KS277 PLEASANT,7.00,,
+12 Dec,Contactless Interac purchase - 8353 HOGAN COURT ESS,7.21,,
+12 Dec,Contactless Interac purchase - 2719 ATLANTIC SUPERS,14.83,,
+12 Dec,Contactless Interac purchase - 6466 HOGAN COURT ESS,17.19,,
+13 Dec,Contactless Interac purchase - 9872 HOGAN COURT ESS,21.84,,
+13 Dec,Visa Debit purchase - 5648 TIM HORTONS #81,8.05,,
+13 Dec,Visa Debit auth reversal expired - 8218 UBER CANADA/UBE,11.86,,
+13 Dec,Visa Debit purchase - 4947 DAZN Limited,22.99,,543.75
+13 Dec,Online Banking payment - 2381 CAPITAL ONE M/C,36.51,,
+13 Dec,Online Banking payment - 1065 DACOLLECT,74.12,,
+13 Dec,Contactless Interac purchase - 0545 DOLLARAMA #1024,1.15,,
+13 Dec,Contactless Interac purchase - 8871 TIM HORTONS #41,2.42,,
+13 Dec,Contactless Interac purchase - 0060 MCDONALD'S #406,4.60,,
+13 Dec,Contactless Interac purchase - 3896 KS277 PLEASANT,8.00,,
+13 Dec,Contactless Interac purchase - 7582 SOBEYS #758,35.87,,381.08
+14 Dec,Online Banking transfer - 4944,61.00,,442.08
+14 Dec,Misc Payment GOODLIFE CLUBS,35.64,,
+14 Dec,Auto Payment FORD CREDIT CA,390.68,,
+14 Dec,Contactless Interac purchase - 9779 TIM HORTONS #41,10.10,,5.66
+15 Dec,Online Banking transfer - 7217,12.00,,
+15 Dec,Online Banking transfer - 4080,,9,000.00,9,017.66
+15 Dec,Payroll Deposit Glen Arbour Gol,,1,352.19,
+15 Dec,Cash withdrawal BR TO BR - 5783,10,000.00,,
+15 Dec,e-Transfer sent darth vapour RJMF8S,57.49,,
+15 Dec,Contactless Interac purchase - 5617 THE MELLOW MUG,4.30,,
+15 Dec,Contactless Interac purchase - 2932 MCDONALD'S #401,8.27,,
+15 Dec,Contactless Interac purchase - 1683 WALMART STORE #,9.20,,
+15 Dec,Contactless Interac purchase - 3418 MADCUTS,30.00,,
+15 Dec,Contactless Interac purchase - 8588 SHELL 4572,30.02,,
+15 Dec,Contactless Interac purchase - 0169 JIFFY LUBE LARR,230.29,,0.28
+
+CATEGORIZATION PATTERNS:
+- Online Banking transfers: Usually internal transfers
+- Contactless Interac purchases: Retail purchases (food, gas, services)
+- Visa Debit purchases: Online purchases, subscriptions
+- Payroll deposits: Income from employment
+- e-Transfers: Personal transfers between accounts
+- Auto payments: Recurring payments (loans, memberships)
+- Misc payments: Various service payments
+- Cash withdrawals: ATM or branch withdrawals
+
+MERCHANT CATEGORIES:
+- Food & Beverage: TIM HORTONS, MCDONALD'S, WENDY'S, STARBUCKS, SUBWAY
+- Gas & Fuel: SHELL, WILSON S FUEL, CIRCLE K
+- Groceries: SOBEYS, ATLANTIC SUPERS, WALMART
+- Entertainment: DOOLYS BEDFORD, CINEPLEX, DOMINOS PIZZA
+- Services: MADCUTS, JIFFY LUBE, PUR SIMPLE CL
+- Online Services: APPLE.COM/BILL, MICROSOFT, DAZN Limited
+- Transportation: UBER CANADA, IC* INSTACART
+- Banking: SCOTIABANK CENT, HALIFAX SCOTIAB
+- Memberships: GOODLIFE CLUBS, FORD CREDIT CA
+
+AMOUNT PATTERNS:
+- Small purchases: $1-20 (coffee, snacks, small items)
+- Medium purchases: $20-100 (meals, services, entertainment)
+- Large purchases: $100+ (major services, transfers, payments)
+- Transfers: Variable amounts, often round numbers
+- Payroll: Regular amounts, typically $1000+
+
+DATE FORMAT: DD MMM (e.g., "11 Dec", "15 Dec")
+BALANCE FORMAT: Running balance after each transaction
+CURRENCY: Canadian Dollars ($) 

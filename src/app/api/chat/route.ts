@@ -1,18 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { openAIClient } from '../../../lib/openaiClient';
 
-// Lazy initialization of OpenAI client to prevent build-time errors
-let openai: OpenAI | null = null;
+// Fallback responses for when OpenAI is not available
+const fallbackResponses = {
+  'upload': 'To upload a file, click the "Upload Bank Statement" button and select your CSV or PDF file from RBC, TD, BMO, Scotia, or CIBC. Our AI will automatically categorize your transactions.',
+  'categorization': 'Our AI categorizes transactions with 95%+ accuracy using machine learning. You can review and correct any categorizations, and the system learns from your corrections.',
+  'export': 'You can export your categorized transactions to Xero, QuickBooks, Sage 50, or CSV format. Go to the Export tab after processing your file.',
+  'security': 'Meridian AI uses bank-level security with SOC 2 Type II compliance. Your data is encrypted in transit and at rest, and we never store your banking credentials.',
+  'formats': 'We support CSV and PDF bank statements from major Canadian banks: RBC, TD Canada Trust, BMO, Scotiabank, and CIBC.',
+  'default': 'I\'m here to help with Meridian AI! You can ask about file uploads, AI categorization, exports to accounting software, security, or supported bank formats.'
+};
 
-function getOpenAIClient(): OpenAI {
-  if (!openai) {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY environment variable is required');
-    }
-    openai = new OpenAI({ apiKey });
+function getFallbackResponse(message: string): string {
+  const lowerMessage = message.toLowerCase();
+  
+  if (lowerMessage.includes('upload') || lowerMessage.includes('file')) {
+    return fallbackResponses.upload;
   }
-  return openai;
+  if (lowerMessage.includes('categoriz') || lowerMessage.includes('ai') || lowerMessage.includes('category')) {
+    return fallbackResponses.categorization;
+  }
+  if (lowerMessage.includes('export') || lowerMessage.includes('quickbooks') || lowerMessage.includes('xero')) {
+    return fallbackResponses.export;
+  }
+  if (lowerMessage.includes('security') || lowerMessage.includes('safe') || lowerMessage.includes('secure')) {
+    return fallbackResponses.security;
+  }
+  if (lowerMessage.includes('format') || lowerMessage.includes('bank') || lowerMessage.includes('csv') || lowerMessage.includes('pdf')) {
+    return fallbackResponses.formats;
+  }
+  
+  return fallbackResponses.default;
 }
 
 export async function POST(request: NextRequest) {
@@ -21,6 +39,23 @@ export async function POST(request: NextRequest) {
 
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
+    }
+
+    // Try to get OpenAI client
+    const client = openAIClient.getClient();
+    
+    if (!client) {
+      // Use fallback response when OpenAI is not available
+      const fallbackResponse = getFallbackResponse(message);
+      
+      return NextResponse.json({ 
+        response: fallbackResponse,
+        conversationHistory: [...conversationHistory, 
+          { role: 'user', content: message },
+          { role: 'assistant', content: fallbackResponse }
+        ],
+        note: 'Using fallback response - OpenAI API not available'
+      });
     }
 
     // System prompt to make ChatGPT act as a Meridian AI support assistant
@@ -54,29 +89,54 @@ Be helpful, professional, and focus on Meridian AI features. If users ask about 
       { role: 'user' as const, content: message }
     ];
 
-    const client = getOpenAIClient();
-    const completion = await client.chat.completions.create({
+    // Use centralized OpenAI client
+    const result = await openAIClient.createChatCompletion(messages, {
       model: 'gpt-3.5-turbo',
-      messages: messages,
-      max_tokens: 500,
+      maxTokens: 500,
       temperature: 0.7,
+      timeout: 10000
     });
 
-    const response = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
-
-    return NextResponse.json({ 
-      response,
-      conversationHistory: [...conversationHistory, 
-        { role: 'user', content: message },
-        { role: 'assistant', content: response }
-      ]
-    });
+    if (result.success && result.response) {
+      return NextResponse.json({ 
+        response: result.response,
+        conversationHistory: [...conversationHistory, 
+          { role: 'user', content: message },
+          { role: 'assistant', content: result.response }
+        ]
+      });
+    } else {
+      // Handle specific error cases
+      let fallbackResponse: string;
+      
+      if (result.error === 'timeout') {
+        fallbackResponse = "I'm taking a bit longer than usual to respond. Please try again in a moment, or contact support if this persists.";
+      } else if (result.error === 'invalid_api_key') {
+        fallbackResponse = getFallbackResponse(message);
+      } else {
+        fallbackResponse = getFallbackResponse(message);
+      }
+      
+      return NextResponse.json({ 
+        response: fallbackResponse,
+        conversationHistory: [...conversationHistory, 
+          { role: 'user', content: message },
+          { role: 'assistant', content: fallbackResponse }
+        ],
+        note: `Using fallback response due to: ${result.error}`
+      });
+    }
 
   } catch (error) {
-    console.error('OpenAI API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to get response from ChatGPT' },
-      { status: 500 }
-    );
+    console.error('Chat API error:', error);
+    
+    // Even if everything fails, provide a helpful response
+    const fallbackResponse = "I'm having trouble connecting right now, but I'm here to help with Meridian AI! You can ask about file uploads, AI categorization, exports, or any other features.";
+    
+    return NextResponse.json({ 
+      response: fallbackResponse,
+      conversationHistory: [],
+      note: 'Using emergency fallback response'
+    });
   }
 } 

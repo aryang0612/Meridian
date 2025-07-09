@@ -1,0 +1,6 @@
+Date,Description,Amount,Account Code,Confidence,Status
+2024-01-15,"STARBUCKS COFFEE #1234",-5.67,,0,Pending
+2024-01-15,"WALMART SUPERCENTER #456",-89.45,,0,Pending
+2024-01-15,"SEND E-TFR TO JOHN DOE",-250,,0,Pending
+2024-01-15,"DEPOSIT FROM ABC COMPANY",1500,,0,Pending
+2024-01-15,"CHEQUE #1234",-75,,0,Pending

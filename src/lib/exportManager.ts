@@ -1,5 +1,6 @@
 import { Transaction } from './types';
 import { ChartOfAccounts } from './chartOfAccounts';
+import { escapeCSVRow } from './formatUtils';
 
 export interface ExportFormat {
   id: string;
@@ -350,19 +351,10 @@ export class ExportManager {
   }
 
   /**
-   * Escape CSV row values
+   * Escape CSV row for safe export - now using centralized utility
    */
-  private escapeCSVRow(values: string[]): string {
-    return values.map(value => {
-      const stringValue = value?.toString() || '';
-      
-      // Escape if contains comma, quote, or newline
-      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-        return `"${stringValue.replace(/"/g, '""')}"`;
-      }
-      
-      return stringValue;
-    }).join(',');
+  private escapeCSVRow(row: string[]): string {
+    return escapeCSVRow(row);
   }
 
   /**

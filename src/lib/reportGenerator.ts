@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ChartOfAccounts } from './chartOfAccounts';
+import { formatCurrency, formatDate } from './formatUtils';
 
 // Types for financial data
 export interface Transaction {
@@ -111,100 +112,80 @@ const FALLBACK_ACCOUNT_CATEGORIES = {
 };
 
 export class ReportGenerator {
-  private chartOfAccounts: ChartOfAccounts | null = null;
+  private chartOfAccounts: ChartOfAccounts;
 
-  constructor(province: string = 'ON') {
-    this.initializeChartOfAccounts(province);
-  }
-
-  private async initializeChartOfAccounts(province: string): Promise<void> {
-    try {
-      this.chartOfAccounts = new ChartOfAccounts(province);
-      await this.chartOfAccounts.waitForInitialization();
-      console.log(`📊 ReportGenerator initialized with Chart of Accounts for province: ${province}`);
-    } catch (error) {
-      console.warn('Could not initialize Chart of Accounts, using fallback categorization:', error);
-      this.chartOfAccounts = null;
-    }
+  constructor(chartOfAccounts: ChartOfAccounts) {
+    this.chartOfAccounts = chartOfAccounts;
   }
 
   public setProvince(province: string): void {
-    if (this.chartOfAccounts) {
-      this.chartOfAccounts.setProvince(province);
-      console.log(`📊 ReportGenerator switched to province: ${province}`);
-    } else {
-      this.initializeChartOfAccounts(province);
+    if (!this.chartOfAccounts) {
+      console.error('❌ ChartOfAccounts is not initialized in ReportGenerator');
+      return;
     }
-  }
-
-  private formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-CA', {
-      style: 'currency',
-      currency: 'CAD',
-      minimumFractionDigits: 2
-    }).format(Math.abs(amount));
-  }
-
-  private formatDate(date: Date): string {
-    return new Intl.DateTimeFormat('en-CA', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    }).format(date);
+    this.chartOfAccounts.setProvince(province);
+    console.log(`📊 ReportGenerator switched to province: ${province}`);
   }
 
   private categorizeAccount(accountCode: string): {
     type: 'income' | 'expense' | 'asset' | 'liability' | 'equity';
     balanceSheetCategory: string | null;
   } {
-    // First try to use Chart of Accounts if available
-    if (this.chartOfAccounts) {
-      const account = this.chartOfAccounts.getAccount(accountCode);
-      if (account) {
-        // Map Chart of Accounts types to our types
-        let type: 'income' | 'expense' | 'asset' | 'liability' | 'equity';
-        let balanceSheetCategory: string | null = null;
+    accountCode = String(accountCode);
+    // Use Chart of Accounts
+    const account = this.chartOfAccounts.getAccount(accountCode);
+    if (account) {
+      // Map Chart of Accounts types to our types
+      let type: 'income' | 'expense' | 'asset' | 'liability' | 'equity';
+      let balanceSheetCategory: string | null = null;
 
-        switch (account.type) {
-          case 'Revenue':
-            type = 'income';
-            break;
-          case 'Expense':
-            type = 'expense';
-            break;
-          case 'Asset':
-            type = 'asset';
-            // Determine if current or non-current asset based on account code
-            if (account.code.match(/^6[1-9]\d$/)) {
-              balanceSheetCategory = 'currentAssets';
-            } else if (account.code.match(/^7\d{2}$/)) {
-              balanceSheetCategory = 'nonCurrentAssets';
-            }
-            break;
-          case 'Liability':
-            type = 'liability';
-            // Determine if current or non-current liability based on account code
-            if (account.code.match(/^8\d{2}$/)) {
-              balanceSheetCategory = 'currentLiabilities';
-            } else if (account.code.match(/^9\d{2}$/)) {
-              balanceSheetCategory = 'nonCurrentLiabilities';
-            }
-            break;
-          case 'Equity':
-            type = 'equity';
-            balanceSheetCategory = 'equity';
-            break;
-          default:
-            type = 'expense';
-        }
-
-        console.log(`📊 Chart of Accounts categorization: ${accountCode} (${account.name}) -> ${type} (${account.type})`);
-        return { type, balanceSheetCategory };
+      switch (account.type) {
+        case 'Revenue':
+          type = 'income';
+          break;
+        case 'Expense':
+          type = 'expense';
+          break;
+        case 'Asset':
+          type = 'asset';
+          // Determine if current or non-current asset based on account code
+          if (account.code.match(/^6[1-9]\d$/)) {
+            balanceSheetCategory = 'currentAssets';
+          } else if (account.code.match(/^7\d{2}$/)) {
+            balanceSheetCategory = 'nonCurrentAssets';
+          }
+          break;
+        case 'Liability':
+          type = 'liability';
+          // Determine if current or non-current liability based on account code
+          if (account.code.match(/^8\d{2}$/)) {
+            balanceSheetCategory = 'currentLiabilities';
+          } else if (account.code.match(/^9\d{2}$/)) {
+            balanceSheetCategory = 'nonCurrentLiabilities';
+          }
+          break;
+        case 'Equity':
+          type = 'equity';
+          balanceSheetCategory = 'equity';
+          break;
+        default:
+          type = 'expense';
       }
+
+      console.log(`📊 Chart of Accounts categorization: ${accountCode} (${account.name}) -> ${type} (${account.type})`);
+      return { type, balanceSheetCategory };
     }
 
     // Fallback to regex-based categorization if Chart of Accounts is not available
-    for (const [key, config] of Object.entries(FALLBACK_ACCOUNT_CATEGORIES)) {
+    const fallbackCategories = {
+      income: { regex: /^2\d{2}$/, type: 'income' as const, balanceSheetCategory: null },
+      expense: { regex: /^[4-5]\d{2}$/, type: 'expense' as const, balanceSheetCategory: null },
+      asset: { regex: /^[6-7]\d{2}$/, type: 'asset' as const, balanceSheetCategory: 'currentAssets' },
+      liability: { regex: /^[8-9]\d{2}$/, type: 'liability' as const, balanceSheetCategory: 'currentLiabilities' },
+      equity: { regex: /^96\d$/, type: 'equity' as const, balanceSheetCategory: null }
+    };
+    
+    for (const [key, config] of Object.entries(fallbackCategories)) {
       if (config.regex.test(accountCode)) {
         console.log(`📊 Fallback categorization: ${accountCode} -> ${config.type}`);
         return {
@@ -222,7 +203,7 @@ export class ReportGenerator {
   public generateProfitLossData(data: FinancialData): ProfitLossData {
     // Ensure Chart of Accounts is initialized with the correct province
     const province = data.province || 'ON';
-    if (this.chartOfAccounts?.getProvince() !== province) {
+    if (this.chartOfAccounts && this.chartOfAccounts.getProvince() !== province) {
       this.setProvince(province);
     }
 
@@ -256,11 +237,14 @@ export class ReportGenerator {
       let codeToUse = transaction.accountCode;
       let accountFound = false;
       if (this.chartOfAccounts) {
-        const account = this.chartOfAccounts.getAccount(transaction.accountCode);
+        const account = this.chartOfAccounts.getAccount(String(transaction.accountCode));
         if (account) {
           accountName = account.name;
           codeToUse = account.code;
           accountFound = true;
+          console.log(`✅ Found account: ${transaction.accountCode} -> ${account.name} (${account.type})`);
+        } else {
+          console.log(`❌ Account not found: ${transaction.accountCode} for transaction: ${transaction.description}`);
         }
       }
       if (!accountFound) {
@@ -317,11 +301,11 @@ export class ReportGenerator {
       if (data.type === 'income') {
         revenue.categories.push(item);
         revenue.total += data.amount;
-        console.log(`💰 Revenue: ${categoryName} (${data.accountCode}) = ${this.formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
+        console.log(`💰 Revenue: ${categoryName} (${data.accountCode}) = ${formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
       } else if (data.type === 'expense') {
         expenses.categories.push(item);
         expenses.total += data.amount;
-        console.log(`💸 Expense: ${categoryName} (${data.accountCode}) = ${this.formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
+        console.log(`💸 Expense: ${categoryName} (${data.accountCode}) = ${formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
       } else {
         console.warn(`⚠️ Unknown account type for ${categoryName} (${data.accountCode}) - excluded from PnL`);
       }
@@ -343,13 +327,13 @@ export class ReportGenerator {
 
     // Log final calculations
     console.log(`📈 PnL Summary (Province: ${province}):`);
-    console.log(`   Revenue: ${this.formatCurrency(revenue.total)}`);
-    console.log(`   Expenses: ${this.formatCurrency(expenses.total)}`);
-    console.log(`   Cost of Goods Sold: ${this.formatCurrency(costOfGoodsSold)}`);
-    console.log(`   Gross Profit: ${this.formatCurrency(grossProfit)}`);
-    console.log(`   Operating Expenses: ${this.formatCurrency(operatingExpenses)}`);
-    console.log(`   Operating Income: ${this.formatCurrency(operatingIncome)}`);
-    console.log(`   Net Income: ${this.formatCurrency(netIncome)}`);
+    console.log(`   Revenue: ${formatCurrency(revenue.total)}`);
+    console.log(`   Expenses: ${formatCurrency(expenses.total)}`);
+    console.log(`   Cost of Goods Sold: ${formatCurrency(costOfGoodsSold)}`);
+    console.log(`   Gross Profit: ${formatCurrency(grossProfit)}`);
+    console.log(`   Operating Expenses: ${formatCurrency(operatingExpenses)}`);
+    console.log(`   Operating Income: ${formatCurrency(operatingIncome)}`);
+    console.log(`   Net Income: ${formatCurrency(netIncome)}`);
     
     // Log account code ranges being used
     console.log(`📊 Account Code Ranges (Province: ${province}):`);
@@ -433,7 +417,7 @@ export class ReportGenerator {
       let codeToUse = transaction.accountCode;
       let accountFound = false;
       if (this.chartOfAccounts) {
-        const account = this.chartOfAccounts.getAccount(transaction.accountCode);
+        const account = this.chartOfAccounts.getAccount(String(transaction.accountCode));
         if (account) {
           accountName = account.name;
           codeToUse = account.code;
@@ -496,27 +480,27 @@ export class ReportGenerator {
         case 'currentAssets':
           assets.current.push(item);
           assets.totalCurrent += data.amount;
-          console.log(`💼 Current Asset: ${item.name} (${data.accountCode}) = ${this.formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
+          console.log(`💼 Current Asset: ${item.name} (${data.accountCode}) = ${formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
           break;
         case 'nonCurrentAssets':
           assets.nonCurrent.push(item);
           assets.totalNonCurrent += data.amount;
-          console.log(`🏢 Non-Current Asset: ${item.name} (${data.accountCode}) = ${this.formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
+          console.log(`🏢 Non-Current Asset: ${item.name} (${data.accountCode}) = ${formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
           break;
         case 'currentLiabilities':
           liabilities.current.push(item);
           liabilities.totalCurrent += data.amount;
-          console.log(`💳 Current Liability: ${item.name} (${data.accountCode}) = ${this.formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
+          console.log(`💳 Current Liability: ${item.name} (${data.accountCode}) = ${formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
           break;
         case 'nonCurrentLiabilities':
           liabilities.nonCurrent.push(item);
           liabilities.totalNonCurrent += data.amount;
-          console.log(`🏦 Non-Current Liability: ${item.name} (${data.accountCode}) = ${this.formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
+          console.log(`🏦 Non-Current Liability: ${item.name} (${data.accountCode}) = ${formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
           break;
         case 'equity':
           equity.items.push(item);
           equity.total += data.amount;
-          console.log(`👤 Equity: ${item.name} (${data.accountCode}) = ${this.formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
+          console.log(`👤 Equity: ${item.name} (${data.accountCode}) = ${formatCurrency(data.amount)} (${data.transactionCount} transactions)`);
           break;
       }
     });
@@ -531,13 +515,13 @@ export class ReportGenerator {
 
     // Log final calculations
     console.log(`📊 Balance Sheet Summary (Province: ${province}):`);
-    console.log(`   Total Assets: ${this.formatCurrency(assets.total)}`);
-    console.log(`   Total Liabilities: ${this.formatCurrency(liabilities.total)}`);
-    console.log(`   Total Equity: ${this.formatCurrency(equity.total)}`);
+    console.log(`   Total Assets: ${formatCurrency(assets.total)}`);
+    console.log(`   Total Liabilities: ${formatCurrency(liabilities.total)}`);
+    console.log(`   Total Equity: ${formatCurrency(equity.total)}`);
     const calculatedEquity = assets.total - liabilities.total;
     const equityDifference = Math.abs(equity.total - calculatedEquity);
     if (equityDifference > 0.01) {
-      console.warn(`⚠️ Balance Sheet equation check: Assets (${this.formatCurrency(assets.total)}) - Liabilities (${this.formatCurrency(liabilities.total)}) = ${this.formatCurrency(calculatedEquity)}, but Equity shows ${this.formatCurrency(equity.total)}`);
+      console.warn(`⚠️ Balance Sheet equation check: Assets (${formatCurrency(assets.total)}) - Liabilities (${formatCurrency(liabilities.total)}) = ${formatCurrency(calculatedEquity)}, but Equity shows ${formatCurrency(equity.total)}`);
     } else {
       console.log(`✅ Balance Sheet equation balanced: Assets - Liabilities = Equity`);
     }
@@ -558,8 +542,8 @@ export class ReportGenerator {
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Period: ${this.formatDate(data.startDate)} to ${this.formatDate(data.endDate)}`, 20, 45);
-    doc.text(`Generated: ${this.formatDate(data.reportDate)}`, 20, 52);
+    doc.text(`Period: ${formatDate(data.startDate)} to ${formatDate(data.endDate)}`, 20, 45);
+    doc.text(`Generated: ${formatDate(data.reportDate)}`, 20, 52);
 
     let yPosition = 70;
 
@@ -571,7 +555,7 @@ export class ReportGenerator {
 
     const revenueData = plData.revenue.categories.map(cat => [
       `${cat.accountCode} - ${cat.name}`,
-      this.formatCurrency(cat.amount)
+      formatCurrency(cat.amount)
     ]);
 
     if (revenueData.length > 0) {
@@ -590,7 +574,7 @@ export class ReportGenerator {
     // Total Revenue
     doc.setFont('helvetica', 'bold');
     doc.text('Total Revenue:', 20, yPosition);
-    doc.text(this.formatCurrency(plData.revenue.total), 150, yPosition);
+    doc.text(formatCurrency(plData.revenue.total), 150, yPosition);
     yPosition += 20;
 
     // Expenses Section
@@ -600,7 +584,7 @@ export class ReportGenerator {
 
     const expenseData = plData.expenses.categories.map(cat => [
       `${cat.accountCode} - ${cat.name}`,
-      this.formatCurrency(cat.amount)
+      formatCurrency(cat.amount)
     ]);
 
     if (expenseData.length > 0) {
@@ -618,7 +602,7 @@ export class ReportGenerator {
 
     // Total Expenses
     doc.text('Total Expenses:', 20, yPosition);
-    doc.text(this.formatCurrency(plData.expenses.total), 150, yPosition);
+    doc.text(formatCurrency(plData.expenses.total), 150, yPosition);
     yPosition += 15;
 
     // Net Income
@@ -630,7 +614,7 @@ export class ReportGenerator {
     const netIncomeColor = plData.netIncome >= 0 ? [0, 128, 0] : [255, 0, 0];
     doc.setTextColor(...(netIncomeColor as [number, number, number]));
     doc.text('NET INCOME:', 20, yPosition);
-    doc.text(this.formatCurrency(plData.netIncome), 150, yPosition);
+    doc.text(formatCurrency(plData.netIncome), 150, yPosition);
 
     // Footer
     doc.setTextColor(0, 0, 0);
@@ -655,8 +639,8 @@ export class ReportGenerator {
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text(`As of ${this.formatDate(data.endDate)}`, 20, 45);
-    doc.text(`Generated: ${this.formatDate(data.reportDate)}`, 20, 52);
+    doc.text(`As of ${formatDate(data.endDate)}`, 20, 45);
+    doc.text(`Generated: ${formatDate(data.reportDate)}`, 20, 52);
 
     let yPosition = 70;
 
@@ -674,7 +658,7 @@ export class ReportGenerator {
     if (bsData.assets.current.length > 0) {
       const currentAssetsData = bsData.assets.current.map(item => [
         `${item.accountCode} - ${item.name}`,
-        this.formatCurrency(item.amount)
+        formatCurrency(item.amount)
       ]);
 
       autoTable(doc, {
@@ -691,7 +675,7 @@ export class ReportGenerator {
 
     doc.setFont('helvetica', 'bold');
     doc.text('Total Current Assets:', 30, yPosition);
-    doc.text(this.formatCurrency(bsData.assets.totalCurrent), 150, yPosition);
+    doc.text(formatCurrency(bsData.assets.totalCurrent), 150, yPosition);
     yPosition += 15;
 
     // Non-Current Assets
@@ -702,7 +686,7 @@ export class ReportGenerator {
     if (bsData.assets.nonCurrent.length > 0) {
       const nonCurrentAssetsData = bsData.assets.nonCurrent.map(item => [
         `${item.accountCode} - ${item.name}`,
-        this.formatCurrency(item.amount)
+        formatCurrency(item.amount)
       ]);
 
       autoTable(doc, {
@@ -719,7 +703,7 @@ export class ReportGenerator {
 
     doc.setFont('helvetica', 'bold');
     doc.text('Total Non-Current Assets:', 30, yPosition);
-    doc.text(this.formatCurrency(bsData.assets.totalNonCurrent), 150, yPosition);
+    doc.text(formatCurrency(bsData.assets.totalNonCurrent), 150, yPosition);
     yPosition += 10;
 
     // Total Assets
@@ -727,7 +711,7 @@ export class ReportGenerator {
     doc.line(20, yPosition, 190, yPosition);
     yPosition += 8;
     doc.text('TOTAL ASSETS:', 20, yPosition);
-    doc.text(this.formatCurrency(bsData.assets.total), 150, yPosition);
+    doc.text(formatCurrency(bsData.assets.total), 150, yPosition);
     yPosition += 20;
 
     // LIABILITIES Section
@@ -743,7 +727,7 @@ export class ReportGenerator {
     if (bsData.liabilities.current.length > 0) {
       const currentLiabilitiesData = bsData.liabilities.current.map(item => [
         `${item.accountCode} - ${item.name}`,
-        this.formatCurrency(item.amount)
+        formatCurrency(item.amount)
       ]);
 
       autoTable(doc, {
@@ -760,7 +744,7 @@ export class ReportGenerator {
 
     doc.setFont('helvetica', 'bold');
     doc.text('Total Current Liabilities:', 30, yPosition);
-    doc.text(this.formatCurrency(bsData.liabilities.totalCurrent), 150, yPosition);
+    doc.text(formatCurrency(bsData.liabilities.totalCurrent), 150, yPosition);
     yPosition += 15;
 
     // Equity
@@ -771,7 +755,7 @@ export class ReportGenerator {
     if (bsData.equity.items.length > 0) {
       const equityData = bsData.equity.items.map(item => [
         `${item.accountCode} - ${item.name}`,
-        this.formatCurrency(item.amount)
+        formatCurrency(item.amount)
       ]);
 
       autoTable(doc, {
@@ -788,7 +772,7 @@ export class ReportGenerator {
 
     doc.setFont('helvetica', 'bold');
     doc.text('Total Equity:', 30, yPosition);
-    doc.text(this.formatCurrency(bsData.equity.total), 150, yPosition);
+    doc.text(formatCurrency(bsData.equity.total), 150, yPosition);
     yPosition += 10;
 
     // Total Liabilities & Equity
@@ -797,7 +781,7 @@ export class ReportGenerator {
     doc.line(20, yPosition, 190, yPosition);
     yPosition += 8;
     doc.text('TOTAL LIABILITIES & EQUITY:', 20, yPosition);
-    doc.text(this.formatCurrency(totalLiabilitiesEquity), 150, yPosition);
+    doc.text(formatCurrency(totalLiabilitiesEquity), 150, yPosition);
 
     // Footer
     doc.setTextColor(0, 0, 0);
@@ -812,13 +796,13 @@ export class ReportGenerator {
 // Helper to infer type from account code
 export function categorizeAccountType(accountCode: string): 'income' | 'expense' | 'asset' | 'liability' | 'equity' {
   if (!accountCode) return 'expense';
-  if (/^2\d{2}$/.test(accountCode)) return 'income'; // Revenue
-  if (/^31\d$/.test(accountCode)) return 'expense'; // COGS
-  if (/^[4-5]\d{2}$/.test(accountCode)) return 'expense'; // Operating Expenses
-  if (/^6[1-9]\d$/.test(accountCode)) return 'asset'; // Current Assets
-  if (/^7\d{2}$/.test(accountCode)) return 'asset'; // Fixed Assets
-  if (/^8\d{2}$/.test(accountCode)) return 'liability'; // Current Liabilities
-  if (/^9\d{2}$/.test(accountCode)) return 'liability'; // Non-Current Liabilities
-  if (/^9[6-9]\d$/.test(accountCode)) return 'equity'; // Equity
+  if (/^2\d{2}$/.test(accountCode)) return 'income'; // Revenue (200-299)
+  if (/^31\d$/.test(accountCode)) return 'expense'; // COGS (310-319)
+  if (/^[4-5]\d{2}$/.test(accountCode)) return 'expense'; // Operating Expenses (400-599)
+  if (/^6[1-9]\d$/.test(accountCode)) return 'asset'; // Current Assets (610-699)
+  if (/^7\d{2}$/.test(accountCode)) return 'asset'; // Fixed Assets (710-799)
+  if (/^8\d{2}$/.test(accountCode)) return 'liability'; // Current Liabilities (800-899)
+  if (/^9\d{2}$/.test(accountCode)) return 'liability'; // Non-Current Liabilities (900-999)
+  if (/^9[6-9]\d$/.test(accountCode)) return 'equity'; // Equity (960-999)
   return 'expense';
 }

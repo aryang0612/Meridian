@@ -1,7 +1,11 @@
 'use client';
 import NavigationBar from '../../components/NavigationBar';
+import KeywordManager from '../../components/KeywordManager';
+import { useState } from 'react';
 
 export default function SettingsPage() {
+  const [showKeywordManager, setShowKeywordManager] = useState(false);
+
   return (
     <div className="min-h-screen">
       <NavigationBar activeSection="settings" />
@@ -17,8 +21,8 @@ export default function SettingsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </div>
-              <div>
                 <h1 className="text-3xl font-bold text-slate-900">Settings</h1>
+              <div>
                 <p className="text-slate-600 mt-1">Manage your account preferences and system configuration</p>
               </div>
             </div>
@@ -66,6 +70,10 @@ export default function SettingsPage() {
                 <div className="p-4 bg-slate-50 rounded-lg">
                   <h3 className="font-medium text-slate-900 mb-1">AI Processing</h3>
                   <p className="text-sm text-slate-600">Configure AI categorization settings</p>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setShowKeywordManager(true)}>
+                  <h3 className="font-medium text-slate-900 mb-1">Custom Keywords</h3>
+                  <p className="text-sm text-slate-600">Manage custom transaction categorization rules</p>
                 </div>
                 <div className="p-4 bg-slate-50 rounded-lg">
                   <h3 className="font-medium text-slate-900 mb-1">Export Formats</h3>
@@ -123,12 +131,17 @@ export default function SettingsPage() {
             </div>
             <h3 className="text-xl font-semibold text-slate-900 mb-2">Advanced Settings Coming Soon</h3>
             <p className="text-slate-600 max-w-2xl mx-auto">
-              We're building comprehensive settings management including custom workflows, 
+              We&apos;re building comprehensive settings management including custom workflows, 
               advanced AI training, team collaboration features, and enterprise-grade security controls.
             </p>
           </div>
         </div>
       </div>
+
+      {/* Custom Keyword Manager Modal */}
+      {showKeywordManager && (
+        <KeywordManager onClose={() => setShowKeywordManager(false)} />
+      )}
     </div>
   );
 } 

@@ -1,0 +1,78 @@
+// Test script for RBC PDF parsing
+const { PDFProcessor } = require('./src/lib/pdfProcessor.ts');
+
+// Sample RBC statement lines (from the training data)
+const sampleRbcLines = [
+  'Opening Balance,,,162.62',
+  '11 Dec,Online Banking transfer - 1752,10.00,,',
+  '11 Dec,Online Banking transfer - 2973,10.00,,',
+  '11 Dec,Online Banking transfer - 5322,12.00,,',
+  '11 Dec,Online Banking transfer - 5344,20.00,,',
+  '11 Dec,Online Banking transfer - 7146,30.00,,244.62',
+  '11 Dec,Contactless Interac purchase - 2614 AIR-SERV A PS,12.00,,',
+  '11 Dec,Contactless Interac purchase - 5842 AIR-SERV A PS,12.00,,',
+  '11 Dec,Contactless Interac purchase - 1949 TIM HORTONS #57,2.07,,',
+  '11 Dec,Contactless Interac purchase - 6141 SOBEYS #68,45.26,,',
+  '11 Dec,Contactless Interac purchase - 1732 TIM HORTONS #81,6.43,,',
+  '11 Dec,Contactless Interac purchase - 3032 KS277 PLEASANT,7.00,,',
+  '12 Dec,Online Banking transfer - 2608,9.00,,',
+  '12 Dec,Online Banking transfer - 8125,10.00,,',
+  '12 Dec,Online Banking transfer - 2949,50.00,,',
+  '12 Dec,Visa Debit authorization expired - 8218 UBER CANADA/UBE,11.86,,',
+  '12 Dec,Visa Debit correction - 4947 DAZN Limited,23.19,,57.02',
+  '12 Dec,Misc Payment PNS PAYMENT,,600.00,',
+  '12 Dec,Contactless Interac purchase - 3601 MCDONALD\'S #406,2.30,,',
+  '12 Dec,Contactless Interac purchase - 2101 KS277 PLEASANT,7.00,,',
+  '12 Dec,Contactless Interac purchase - 8353 HOGAN COURT ESS,7.21,,',
+  '12 Dec,Contactless Interac purchase - 2719 ATLANTIC SUPERS,14.83,,',
+  '12 Dec,Contactless Interac purchase - 6466 HOGAN COURT ESS,17.19,,',
+  '13 Dec,Contactless Interac purchase - 9872 HOGAN COURT ESS,21.84,,',
+  '13 Dec,Visa Debit purchase - 5648 TIM HORTONS #81,8.05,,',
+  '13 Dec,Visa Debit auth reversal expired - 8218 UBER CANADA/UBE,11.86,,',
+  '13 Dec,Visa Debit purchase - 4947 DAZN Limited,22.99,,543.75',
+  '13 Dec,Online Banking payment - 2381 CAPITAL ONE M/C,36.51,,',
+  '13 Dec,Online Banking payment - 1065 DACOLLECT,74.12,,',
+  '13 Dec,Contactless Interac purchase - 0545 DOLLARAMA #1024,1.15,,',
+  '13 Dec,Contactless Interac purchase - 8871 TIM HORTONS #41,2.42,,',
+  '13 Dec,Contactless Interac purchase - 0060 MCDONALD\'S #406,4.60,,',
+  '13 Dec,Contactless Interac purchase - 3896 KS277 PLEASANT,8.00,,',
+  '13 Dec,Contactless Interac purchase - 7582 SOBEYS #758,35.87,,381.08',
+  '14 Dec,Online Banking transfer - 4944,61.00,,442.08',
+  '14 Dec,Misc Payment GOODLIFE CLUBS,35.64,,',
+  '14 Dec,Auto Payment FORD CREDIT CA,390.68,,',
+  '14 Dec,Contactless Interac purchase - 9779 TIM HORTONS #41,10.10,,5.66',
+  '15 Dec,Online Banking transfer - 7217,12.00,,',
+  '15 Dec,Online Banking transfer - 4080,,9000.00,9017.66',
+  '15 Dec,Payroll Deposit Glen Arbour Gol,,1352.19,',
+  '15 Dec,Cash withdrawal BR TO BR - 5783,10000.00,,',
+  '15 Dec,e-Transfer sent darth vapour RJMF8S,57.49,,',
+  '15 Dec,Contactless Interac purchase - 5617 THE MELLOW MUG,4.30,,',
+  '15 Dec,Contactless Interac purchase - 2932 MCDONALD\'S #401,8.27,,',
+  '15 Dec,Contactless Interac purchase - 1683 WALMART STORE #,9.20,,',
+  '15 Dec,Contactless Interac purchase - 3418 MADCUTS,30.00,,',
+  '15 Dec,Contactless Interac purchase - 8588 SHELL 4572,30.02,,',
+  '15 Dec,Contactless Interac purchase - 0169 JIFFY LUBE LARR,230.29,,0.28'
+];
+
+console.log('Testing RBC PDF parsing...');
+console.log('Sample RBC lines:', sampleRbcLines.length);
+
+// Create a mock PDFProcessor instance
+const pdfProcessor = new PDFProcessor();
+
+// Test the parsing logic
+console.log('\n=== Testing parseBankStatementText ===');
+const transactions = pdfProcessor.parseBankStatementText(sampleRbcLines);
+
+console.log(`\nFound ${transactions.length} transactions:`);
+transactions.forEach((tx, index) => {
+  console.log(`${index + 1}. Date: ${tx.date}, Amount: ${tx.amount}, Description: "${tx.description}"`);
+});
+
+// Test CSV conversion
+console.log('\n=== Testing CSV conversion ===');
+const csvText = pdfProcessor.transactionsToCSV(transactions);
+console.log('CSV output:');
+console.log(csvText);
+
+console.log('\n=== Test completed ==='); 

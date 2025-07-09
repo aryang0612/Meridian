@@ -1,145 +1,201 @@
 import { Transaction } from './types';
 import { ChartOfAccounts } from './chartOfAccounts';
-import { MERCHANT_PATTERNS } from '../data/merchants';
-import { CATEGORY_MAPPINGS } from '../data/categoryMappings';
+import { MERCHANT_PATTERNS, findMerchantPattern } from '../data/merchants';
+import { CustomKeywordManager } from '../data/customKeywords';
 import Fuse from 'fuse.js';
+import { DatabaseService } from './databaseService';
+import { unifiedPatternEngine } from './unifiedPatternEngine';
 
-// Bank transaction patterns from training data
+// Enhanced bank transaction patterns using account codes
 const BANK_PATTERNS = [
-  // Bank Fees
-  { pattern: /overdrawn\s*handling\s*charge/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /service\s*charge/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /monthly\s*account\s*fee/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /monthly\s*plan\s*fee/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /wire\s*transfer\s*fee/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /atm\s*withdrawal\s*fee/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /certified\s*cheque\s*fee/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /stop\s*payment\s*fee/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /draft\s*fee/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /account\s*maintenance\s*fee/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /tdms\s*stmt.*bus/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /td\s*bus\s*credit\s*ins/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /cash\s*dep\s*fee/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /send\s*e[\-\s]*tfr\s*fee/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
-  { pattern: /cheque\s*charge/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
+  // ACTUAL Bank Fees (Account Code: 404) - Only real bank charges
+  { pattern: /overdrawn\s*handling\s*charge/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /service\s*charge/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /monthly\s*account\s*fee/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /monthly\s*plan\s*fee/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /wire\s*transfer\s*fee/i, accountCode: '404', merchant: 'Wire Transfer Fee', confidence: 95 },
+  { pattern: /atm\s*withdrawal\s*fee/i, accountCode: '404', merchant: 'ATM Fee', confidence: 95 },
+  { pattern: /certified\s*cheque\s*fee/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /stop\s*payment\s*fee/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /draft\s*fee/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /account\s*maintenance\s*fee/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /atm\s*fee/i, accountCode: '404', merchant: 'ATM Fee', confidence: 95 },
+  { pattern: /interac\s*fee/i, accountCode: '404', merchant: 'Interac Fee', confidence: 95 },
+  { pattern: /send\s*e[\-\s]*tfr\s*fee(?!\s*free)/i, accountCode: '404', merchant: 'E-Transfer Fee', confidence: 95 },
+  { pattern: /cheque\s*charge/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /tdms\s*stmt.*bus/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /td\s*bus\s*credit\s*ins/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /cash\s*dep\s*fee/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /foreign\s*exchange\s*fee/i, accountCode: '404', merchant: 'Foreign Exchange Fee', confidence: 95 },
+  { pattern: /lc\/lg\s*fee/i, accountCode: '404', merchant: 'Bank Fee', confidence: 95 },
+  { pattern: /nsf\s*cheque\s*returned/i, accountCode: '404', merchant: 'NSF Fee', confidence: 95 },
+  { pattern: /nsf\s*handling\s*charge/i, accountCode: '404', merchant: 'NSF Fee', confidence: 95 },
+  { pattern: /nsf\s*paid\s*fee/i, accountCode: '404', merchant: 'NSF Fee', confidence: 95 },
+  { pattern: /overdraft\s*interest/i, accountCode: '404', merchant: 'Overdraft Interest', confidence: 95 },
+  { pattern: /overdrawn\s*handling/i, accountCode: '404', merchant: 'Overdraft Fee', confidence: 95 },
 
-  // Interest and Investment Income
-  { pattern: /interest\s*paid/i, category: 'Interest Income', subcategory: 'Interest Income', confidence: 95 },
-  { pattern: /interest\s*earned/i, category: 'Interest Income', subcategory: 'Interest Income', confidence: 95 },
-  { pattern: /interest\s*credit/i, category: 'Interest Income', subcategory: 'Interest Income', confidence: 95 },
-  { pattern: /interest\s*on\s*deposit/i, category: 'Interest Income', subcategory: 'Interest Income', confidence: 95 },
-  { pattern: /investment\s*income/i, category: 'Interest Income', subcategory: 'Investment Income', confidence: 95 },
-  { pattern: /dividend/i, category: 'Interest Income', subcategory: 'Dividends', confidence: 95 },
+  // Payment Processor Fees (Account Code: 888)
+  { pattern: /stripe\s*fee|paypal\s*fee|square\s*fee|shopify\s*fee|payment\s*processing\s*fee/i, accountCode: '888', merchant: 'Processing Fee', confidence: 97 },
+  
+  // General Service Fees (Account Code: 887)
+  { pattern: /service\s*fee|platform\s*fee|subscription\s*fee|membership\s*fee/i, accountCode: '887', merchant: 'Service Fee', confidence: 95 },
 
-  // E-Transfers (Special handling - no account code assigned)
-  { pattern: /send\s*e[\-\s]*tfr(?!\s*fee)/i, category: 'E-Transfer', subcategory: 'E-Transfer', confidence: 95 },
-  { pattern: /e[\-\s]*transfer(?!\s*fee)/i, category: 'E-Transfer', subcategory: 'E-Transfer', confidence: 90 },
-  { pattern: /interac\s*e[\-\s]*transfer/i, category: 'E-Transfer', subcategory: 'E-Transfer', confidence: 95 },
-  { pattern: /etransfer/i, category: 'E-Transfer', subcategory: 'E-Transfer', confidence: 90 },
+  // Interest and Investment Income (Account Code: 270)
+  { pattern: /interest\s*paid/i, accountCode: '270', merchant: 'Interest Income', confidence: 95 },
+  { pattern: /interest\s*earned/i, accountCode: '270', merchant: 'Interest Income', confidence: 95 },
+  { pattern: /interest\s*credit/i, accountCode: '270', merchant: 'Interest Income', confidence: 95 },
+  { pattern: /interest\s*on\s*deposit/i, accountCode: '270', merchant: 'Interest Income', confidence: 95 },
+  { pattern: /investment\s*income/i, accountCode: '270', merchant: 'Investment Income', confidence: 95 },
+  { pattern: /dividend/i, accountCode: '270', merchant: 'Dividend', confidence: 95 },
 
-  // Other Transfers
-  { pattern: /mb[\-\s]*transfer/i, category: 'Bank Related', subcategory: 'Transfers', confidence: 95 },
-  { pattern: /electronic\s*funds\s*transfer/i, category: 'Bank Related', subcategory: 'Transfers', confidence: 95 },
-  { pattern: /[a-z]{2}\d{3}\s*tfr[\-\s]*to/i, category: 'Bank Related', subcategory: 'Transfers', confidence: 95 },
-  { pattern: /[a-z]{2}\d{3}\s*tfr[\-\s]*fr/i, category: 'Bank Related', subcategory: 'Transfers', confidence: 95 },
+  // E-Transfers - REMOVED auto-categorization, now requires manual selection
+  // This allows users to properly categorize e-transfers based on their actual purpose
 
-  // NSF Fees
-  { pattern: /nsf\s*cheque\s*returned/i, category: 'Bank Fees', subcategory: 'NSF Fees', confidence: 95 },
-  { pattern: /nsf\s*handling\s*charge/i, category: 'Bank Fees', subcategory: 'NSF Fees', confidence: 95 },
-  { pattern: /nsf\s*paid\s*fee/i, category: 'Bank Fees', subcategory: 'NSF Fees', confidence: 95 },
+  // Enhanced Deposits (Account Code: 200)
+  { pattern: /government\s*canada/i, accountCode: '200', merchant: 'Government Deposit', confidence: 90 },
+  { pattern: /gc\s*\d+[\-\s]*deposit/i, accountCode: '200', merchant: 'Government Deposit', confidence: 95 },
+  { pattern: /cra\s*deposit/i, accountCode: '200', merchant: 'CRA Deposit', confidence: 95 },
+  { pattern: /canada\s*revenue\s*agency/i, accountCode: '200', merchant: 'CRA Deposit', confidence: 95 },
+  { pattern: /employment\s*insurance/i, accountCode: '200', merchant: 'EI Deposit', confidence: 95 },
+  { pattern: /digital\s*deposit/i, accountCode: '200', merchant: 'Digital Deposit', confidence: 95 },
+  { pattern: /mobile\s*deposit/i, accountCode: '200', merchant: 'Mobile Deposit', confidence: 95 },
+  { pattern: /acct\s*bal\s*rebate/i, accountCode: '200', merchant: 'Account Rebate', confidence: 95 },
+  { pattern: /gm\s*reject\s*item\s*rev/i, accountCode: '200', merchant: 'Reversal Credit', confidence: 95 },
+  
+  // Generic Deposits - Lower confidence for manual review
+  { pattern: /^deposit$/i, accountCode: '200', merchant: 'Deposit', confidence: 80 },
+  { pattern: /^credit$/i, accountCode: '200', merchant: 'Credit', confidence: 80 },
 
-  // Overdraft
-  { pattern: /overdraft\s*interest/i, category: 'Bank Fees', subcategory: 'Overdraft', confidence: 95 },
-  { pattern: /overdrawn\s*handling/i, category: 'Bank Fees', subcategory: 'Overdraft', confidence: 95 },
+  // INTERNAL TRANSFERS (Account Code: 610 - Cash/Bank Account) - NOT Bank Fees
+  { pattern: /internal\s*transfer/i, accountCode: '610', merchant: 'Internal Transfer', confidence: 95 },
+  { pattern: /account\s*transfer/i, accountCode: '610', merchant: 'Account Transfer', confidence: 95 },
+  { pattern: /transfer\s*between\s*accounts/i, accountCode: '610', merchant: 'Internal Transfer', confidence: 95 },
+  { pattern: /savings\s*to\s*chequing/i, accountCode: '610', merchant: 'Internal Transfer', confidence: 95 },
+  { pattern: /chequing\s*to\s*savings/i, accountCode: '610', merchant: 'Internal Transfer', confidence: 95 },
+  { pattern: /[a-z]{2}\d{3}\s*to\s*[a-z]{2}\d{3}/i, accountCode: '610', merchant: 'Internal Transfer', confidence: 95 },
+  { pattern: /mb[\-\s]*transfer/i, accountCode: '610', merchant: 'Bank Transfer', confidence: 95 },
+  { pattern: /electronic\s*funds\s*transfer/i, accountCode: '610', merchant: 'Electronic Transfer', confidence: 95 },
+  { pattern: /[a-z]{2}\d{3}\s*tfr[\-\s]*to/i, accountCode: '610', merchant: 'Transfer Out', confidence: 95 },
+  { pattern: /[a-z]{2}\d{3}\s*tfr[\-\s]*fr/i, accountCode: '610', merchant: 'Transfer In', confidence: 95 },
+  { pattern: /[a-z]{2}\d{3}\s*tfr[\-\s]*to\s*\d+/i, accountCode: '610', merchant: 'Transfer Out', confidence: 95 },
+  { pattern: /[a-z]{2}\d{3}\s*tfr[\-\s]*to(?!\s*fee)/i, accountCode: '610', merchant: 'Transfer Out', confidence: 95 },
 
-  // Bill Payments
-  { pattern: /mb[\-\s]*bill\s*payment/i, category: 'Bank Related', subcategory: 'Bill Payments', confidence: 95 },
-  { pattern: /dominion\s*prem\s*msp/i, category: 'Bank Related', subcategory: 'Bill Payments', confidence: 95 },
-  { pattern: /bell\s*canada\s*eft\s*bpy/i, category: 'Bank Related', subcategory: 'Bill Payments', confidence: 95 },
-  { pattern: /wawanesa\s*ins/i, category: 'Bank Related', subcategory: 'Bill Payments', confidence: 95 },
-  { pattern: /iol\s*pay\s*to:\s*cra/i, category: 'Bank Related', subcategory: 'Bill Payments', confidence: 95 },
-  { pattern: /stripe\s*msp/i, category: 'Bank Related', subcategory: 'Bill Payments', confidence: 95 },
+  // LOAN PAYMENTS (Account Code: 900 - Loan) - NOT Bank Fees
+  { pattern: /term\s*loans/i, accountCode: '900', merchant: 'Loan Payment', confidence: 95 },
+  { pattern: /santander\s*consumer/i, accountCode: '900', merchant: 'Loan Payment', confidence: 95 },
+  { pattern: /res\.\s*mortgage/i, accountCode: '900', merchant: 'Mortgage Payment', confidence: 95 },
+  { pattern: /mortgage\s*payment/i, accountCode: '900', merchant: 'Mortgage Payment', confidence: 95 },
+  { pattern: /loan\s*payment/i, accountCode: '900', merchant: 'Loan Payment', confidence: 95 },
 
-  // Loan Payments
-  { pattern: /term\s*loans/i, category: 'Bank Related', subcategory: 'Loan Payments', confidence: 95 },
-  { pattern: /santander\s*consumer/i, category: 'Bank Related', subcategory: 'Loan Payments', confidence: 95 },
+  // CREDIT CARD PAYMENTS (Account Code: 900 - Loan) - NOT Bank Fees
+  { pattern: /mb[\-\s]*bill\s*payment.*(?:visa|mastercard|credit\s*card|amex)/i, accountCode: '900', merchant: 'Credit Card Payment', confidence: 95 },
+  { pattern: /bill\s*payment.*(?:visa|mastercard|credit\s*card|amex)/i, accountCode: '900', merchant: 'Credit Card Payment', confidence: 95 },
+  { pattern: /payment.*(?:visa|mastercard|credit\s*card|amex)/i, accountCode: '900', merchant: 'Credit Card Payment', confidence: 90 },
+  { pattern: /td\s*visa\s*payment/i, accountCode: '900', merchant: 'TD Visa Payment', confidence: 95 },
+  { pattern: /rbc\s*visa\s*payment/i, accountCode: '900', merchant: 'RBC Visa Payment', confidence: 95 },
+  { pattern: /bmo\s*mastercard\s*payment/i, accountCode: '900', merchant: 'BMO Mastercard Payment', confidence: 95 },
+  { pattern: /scotia\s*visa\s*payment/i, accountCode: '900', merchant: 'Scotia Visa Payment', confidence: 95 },
+  { pattern: /cibc\s*visa\s*payment/i, accountCode: '900', merchant: 'CIBC Visa Payment', confidence: 95 },
+  { pattern: /credit\s*card\s*payment/i, accountCode: '900', merchant: 'Credit Card Payment', confidence: 95 },
+  { pattern: /td\s*visa\s*preauth\s*pymt/i, accountCode: '900', merchant: 'Credit Card Payment', confidence: 95 },
+  { pattern: /td\s*mc\s*\d+/i, accountCode: '900', merchant: 'Credit Card Transaction', confidence: 95 },
+  { pattern: /td\s*idp\s*\d+/i, accountCode: '900', merchant: 'Credit Card Transaction', confidence: 95 },
+  { pattern: /td\s*visa\d+/i, accountCode: '900', merchant: 'Credit Card Transaction', confidence: 95 },
 
-  // Payroll
-  { pattern: /payroll\s*pay/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 95 },
-  { pattern: /payroll\s*deposit/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 95 },
-  { pattern: /payroll/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 90 },
-  { pattern: /employee\s*wages/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 95 },
-  { pattern: /salary/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 90 },
-  { pattern: /wages/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 90 },
+  // BILL PAYMENTS TO VENDORS (Specific account codes based on vendor type)
+  { pattern: /dominion\s*prem\s*msp/i, accountCode: '433', merchant: 'Insurance Payment', confidence: 95 },
+  { pattern: /wawanesa\s*ins/i, accountCode: '433', merchant: 'Insurance Payment', confidence: 95 },
+  { pattern: /bell\s*canada\s*eft\s*bpy/i, accountCode: '489', merchant: 'Bell Payment', confidence: 95 },
+  { pattern: /iol\s*pay\s*to:\s*cra/i, accountCode: '505', merchant: 'CRA Payment', confidence: 95 },
+  { pattern: /iol\s*serviceontario/i, accountCode: '453', merchant: 'Government Service', confidence: 95 },
+  
+  // Generic Bill Payments - Lower confidence for manual review
+  { pattern: /mb[\-\s]*bill\s*payment(?!.*(?:visa|mastercard|credit\s*card|amex))/i, accountCode: '453', merchant: 'Bill Payment', confidence: 80 },
+  { pattern: /bill\s*payment(?!.*(?:visa|mastercard|credit\s*card|amex))/i, accountCode: '453', merchant: 'Bill Payment', confidence: 80 },
 
-  // Special Fees
-  { pattern: /foreign\s*exchange\s*fee/i, category: 'Bank Fees', subcategory: 'Special Fees', confidence: 95 },
-  { pattern: /lc\/lg\s*fee/i, category: 'Bank Fees', subcategory: 'Special Fees', confidence: 95 },
+  // PAYROLL (Account Code: 477 for expenses, 200 for income)
+  { pattern: /payroll\s*pay/i, accountCode: '477', merchant: 'Payroll Expense', confidence: 95 },
+  { pattern: /payroll/i, accountCode: '477', merchant: 'Payroll', confidence: 90 },
+  { pattern: /employee\s*wages/i, accountCode: '477', merchant: 'Employee Wages', confidence: 95 },
+  { pattern: /salary/i, accountCode: '200', merchant: 'Salary', confidence: 90 },
+  { pattern: /wages/i, accountCode: '200', merchant: 'Wages', confidence: 90 },
 
-  // Card Transactions
-  { pattern: /td\s*visa\s*preauth\s*pymt/i, category: 'Bank Related', subcategory: 'Card Transactions', confidence: 95 },
-  { pattern: /td\s*mc\s*\d+/i, category: 'Bank Related', subcategory: 'Card Transactions', confidence: 95 },
-  { pattern: /td\s*idp\s*\d+/i, category: 'Bank Related', subcategory: 'Card Transactions', confidence: 95 },
-  { pattern: /td\s*visa\d+/i, category: 'Bank Related', subcategory: 'Card Transactions', confidence: 95 },
+  // REVENUE TRANSACTIONS
+  { pattern: /stripe\s*msp/i, accountCode: '200', merchant: 'Stripe Payment', confidence: 95 },
+  { pattern: /balance\s*forward/i, accountCode: '200', merchant: 'Balance Forward', confidence: 95 },
 
-  // Credits
-  { pattern: /acct\s*bal\s*rebate/i, category: 'Bank Related', subcategory: 'Credits', confidence: 95 },
+  // BUSINESS EXPENSES (Specific categories)
+  { pattern: /the\s*garage\s*part/i, accountCode: '449', merchant: 'Auto Parts', confidence: 90 },
+  { pattern: /jiffy\s*lube/i, accountCode: '449', merchant: 'Jiffy Lube', confidence: 95 },
+  { pattern: /tim\s*hortons/i, accountCode: '420', merchant: 'Tim Hortons', confidence: 95 },
+  { pattern: /mcdonald/i, accountCode: '420', merchant: 'McDonalds', confidence: 95 },
+  { pattern: /starbucks/i, accountCode: '420', merchant: 'Starbucks', confidence: 95 },
+  { pattern: /dominos\s*pizza/i, accountCode: '420', merchant: 'Dominos Pizza', confidence: 95 },
+  { pattern: /booster\s*juice/i, accountCode: '420', merchant: 'Booster Juice', confidence: 95 },
+  { pattern: /doolys/i, accountCode: '420', merchant: 'Doolys', confidence: 95 },
+  { pattern: /cineplex/i, accountCode: '420', merchant: 'Cineplex', confidence: 95 },
+  { pattern: /dazn/i, accountCode: '420', merchant: 'DAZN', confidence: 95 },
+  { pattern: /doordash/i, accountCode: '420', merchant: 'DoorDash', confidence: 95 },
+  { pattern: /sobeys/i, accountCode: '453', merchant: 'Sobeys', confidence: 95 },
+  { pattern: /walmart/i, accountCode: '453', merchant: 'Walmart', confidence: 90 },
+  { pattern: /dollarama/i, accountCode: '453', merchant: 'Dollarama', confidence: 90 },
+  { pattern: /atlantic\s*supers/i, accountCode: '453', merchant: 'Atlantic Superstore', confidence: 95 },
+  { pattern: /hogan\s*court\s*ess/i, accountCode: '453', merchant: 'Hogan Court ESS', confidence: 90 },
+  { pattern: /instacart/i, accountCode: '453', merchant: 'Instacart', confidence: 95 },
+  { pattern: /pur\s*simple/i, accountCode: '453', merchant: 'Pur Simple', confidence: 90 },
+  { pattern: /goodlife\s*clubs/i, accountCode: '453', merchant: 'GoodLife', confidence: 95 },
+  { pattern: /apple\.com/i, accountCode: '455', merchant: 'Apple', confidence: 95 },
+  { pattern: /microsoft/i, accountCode: '485', merchant: 'Microsoft', confidence: 95 },
+  { pattern: /chegg/i, accountCode: '487', merchant: 'Chegg', confidence: 95 },
+  { pattern: /uber\s*canada/i, accountCode: '493', merchant: 'Uber', confidence: 95 },
+  { pattern: /shell/i, accountCode: '449', merchant: 'Shell', confidence: 95 },
+  { pattern: /circle\s*k/i, accountCode: '449', merchant: 'Circle K', confidence: 90 },
+  { pattern: /ford\s*credit/i, accountCode: '449', merchant: 'Ford Credit', confidence: 95 },
 
-  // Deposits
-  { pattern: /deposit.*free\s*interac\s*e[\-\s]*transfer/i, category: 'Bank Related', subcategory: 'Deposits', confidence: 95 },
-  { pattern: /government\s*canada/i, category: 'Bank Related', subcategory: 'Deposits', confidence: 90 },
-  { pattern: /gc\s*\d+[\-\s]*deposit/i, category: 'Bank Related', subcategory: 'Deposits', confidence: 95 },
-  { pattern: /td\s*atm\s*dep/i, category: 'Bank Related', subcategory: 'Deposits', confidence: 95 },
+  // REJECTED/REVERSED TRANSACTIONS
+  { pattern: /gm\s*reject\s*item/i, accountCode: '404', merchant: 'Rejected Transaction', confidence: 95 },
+  { pattern: /rtd\s*partial\s*payment/i, accountCode: '453', merchant: 'Partial Payment', confidence: 95 },
+  { pattern: /debit\s*memo/i, accountCode: '404', merchant: 'Debit Memo', confidence: 95 },
 
-  // Enhanced Transfer Patterns (from training data)
-  { pattern: /[a-z]{2}\d{3}\s*tfr[\-\s]*to\s*\d+/i, category: 'Bank Related', subcategory: 'Transfers', confidence: 95 },
-  { pattern: /[a-z]{2}\d{3}\s*tfr[\-\s]*to(?!\s*fee)/i, category: 'Bank Related', subcategory: 'Transfers', confidence: 95 },
+  // THIRD-PARTY SERVICES
+  { pattern: /sezzle/i, accountCode: '453', merchant: 'Sezzle', confidence: 95 },
+  { pattern: /afterpay/i, accountCode: '453', merchant: 'Afterpay', confidence: 95 },
+  { pattern: /capital\s*one/i, accountCode: '900', merchant: 'Capital One', confidence: 95 },
+  { pattern: /dacollect/i, accountCode: '453', merchant: 'DA Collect', confidence: 95 },
 
-  // Enhanced Monthly Fees
-  { pattern: /monthly\s*plan\s*fee/i, category: 'Bank Fees', subcategory: 'Bank Fees', confidence: 95 },
+  // BANK-SPECIFIC TRANSACTIONS (Lower confidence for manual review)
+  { pattern: /online\s*banking\s*transfer/i, accountCode: '610', merchant: 'Online Transfer', confidence: 85 },
+  { pattern: /online\s*banking\s*payment/i, accountCode: '453', merchant: 'Online Payment', confidence: 85 },
+  { pattern: /contactless\s*interac\s*purchase/i, accountCode: '453', merchant: 'Contactless Purchase', confidence: 85 },
+  { pattern: /visa\s*debit\s*purchase/i, accountCode: '453', merchant: 'Visa Debit Purchase', confidence: 85 },
+  { pattern: /visa\s*debit\s*auth\s*reversal/i, accountCode: '200', merchant: 'Auth Reversal', confidence: 95 },
+  { pattern: /visa\s*debit\s*correction/i, accountCode: '200', merchant: 'Correction', confidence: 95 },
+  { pattern: /visa\s*debit\s*authorization\s*expired/i, accountCode: '404', merchant: 'Auth Expired', confidence: 95 },
 
-  // Rejected/Reversed Transactions
-  { pattern: /gm\s*reject\s*item/i, category: 'Bank Related', subcategory: 'Other Bank', confidence: 95 },
-  { pattern: /gm\s*reject\s*item\s*rev/i, category: 'Bank Related', subcategory: 'Credits', confidence: 95 },
-  { pattern: /rtd\s*partial\s*payment/i, category: 'Bank Related', subcategory: 'Other Bank', confidence: 95 },
+  // ATM TRANSACTIONS (Account Code: 610 - Cash/Bank Account)
+  { pattern: /atm\s*withdrawal/i, accountCode: '610', merchant: 'ATM Withdrawal', confidence: 95 },
+  { pattern: /atm\s*deposit/i, accountCode: '610', merchant: 'ATM Deposit', confidence: 95 },
+  { pattern: /cash\s*withdrawal/i, accountCode: '610', merchant: 'Cash Withdrawal', confidence: 95 },
 
-  // Account Management
-  { pattern: /open\s*account/i, category: 'Bank Related', subcategory: 'Other Bank', confidence: 95 },
-
-  // Other Bank
-  { pattern: /debit\s*memo/i, category: 'Bank Related', subcategory: 'Other Bank', confidence: 95 },
-
-  // BT Records Specific Patterns (NEW)
-  { pattern: /chq#\d+/i, category: 'Cheques', subcategory: 'Cheques', confidence: 95 },
-  { pattern: /cheque\s*#\d+/i, category: 'Cheques', subcategory: 'Cheques', confidence: 95 },
-  { pattern: /check\s*#\d+/i, category: 'Cheques', subcategory: 'Cheques', confidence: 95 },
-  { pattern: /^cheque$/i, category: 'Cheques', subcategory: 'Cheques', confidence: 90 },
-  { pattern: /^check$/i, category: 'Cheques', subcategory: 'Cheques', confidence: 90 },
-  { pattern: /iol\s*serviceontario/i, category: 'General Expenses', subcategory: 'Government Services', confidence: 95 },
-  { pattern: /iol\s*pay\s*to:\s*cra/i, category: 'Tax Payments', subcategory: 'CRA Payments', confidence: 95 },
-  { pattern: /stripe\s*msp/i, category: 'Revenue', subcategory: 'Payment Processing', confidence: 95 },
-  { pattern: /mobile\s*deposit/i, category: 'Revenue', subcategory: 'Deposits', confidence: 95 },
-  { pattern: /balance\s*forward/i, category: 'Bank Related', subcategory: 'Account Balance', confidence: 95 },
-  { pattern: /the\s*garage\s*part/i, category: 'Motor Vehicle Expenses', subcategory: 'Auto Parts', confidence: 90 },
-  { pattern: /wawanesa\s*ins/i, category: 'Insurance', subcategory: 'Business Insurance', confidence: 95 },
-  { pattern: /dominion\s*prem\s*msp/i, category: 'General Expenses', subcategory: 'Premiums', confidence: 95 },
-  { pattern: /bell\s*canada\s*eft\s*bpy/i, category: 'Telecommunications', subcategory: 'Phone/Internet', confidence: 95 },
-  { pattern: /payroll\s*pay/i, category: 'Payroll', subcategory: 'Employee Wages', confidence: 95 },
-
-  // ATM, Cash, Debit Card, Transfer, Purchase, Miscellaneous (Ambiguous, handle both inflow/outflow)
-  { pattern: /^atm$/i, category: 'Cash', subcategory: 'ATM Withdrawal', confidence: 90 },
-  { pattern: /^cash$/i, category: 'Cash', subcategory: 'Cash Transaction', confidence: 90 },
-  { pattern: /^debit card$/i, category: 'Bank Related', subcategory: 'Debit Card', confidence: 90 },
-  { pattern: /^transfer$/i, category: 'Bank Related', subcategory: 'Transfer', confidence: 90 },
-  { pattern: /^purchase$/i, category: 'General Expenses', subcategory: 'Purchase', confidence: 90 },
-  { pattern: /^miscellaneous$/i, category: 'Other', subcategory: 'Miscellaneous', confidence: 80 },
+  // GENERIC PATTERNS (Lower confidence for manual review)
+  { pattern: /misc\s*payment/i, accountCode: '453', merchant: 'Misc Payment', confidence: 80 },
+  { pattern: /auto\s*payment/i, accountCode: '453', merchant: 'Auto Payment', confidence: 80 },
+  { pattern: /^transfer$/i, accountCode: '610', merchant: 'Transfer', confidence: 80 },
+  { pattern: /^payment$/i, accountCode: '453', merchant: 'Payment', confidence: 80 },
+  { pattern: /^withdrawal$/i, accountCode: '610', merchant: 'Withdrawal', confidence: 80 },
+  { pattern: /^atm$/i, accountCode: '610', merchant: 'ATM Transaction', confidence: 80 },
+  { pattern: /^cash$/i, accountCode: '610', merchant: 'Cash Transaction', confidence: 80 },
+  { pattern: /^debit card$/i, accountCode: '453', merchant: 'Debit Card', confidence: 80 },
+  { pattern: /^purchase$/i, accountCode: '453', merchant: 'Purchase', confidence: 80 },
+  { pattern: /^miscellaneous$/i, accountCode: '453', merchant: 'Miscellaneous', confidence: 70 },
+  { pattern: /^debit$/i, accountCode: '453', merchant: 'Debit', confidence: 70 },
 ];
 
 // Utility to determine inflow/outflow
-export function getInflowOutflow(transaction: Transaction, category: string): 'inflow' | 'outflow' {
-  // If amount is positive and category is income, treat as inflow
+export function getInflowOutflow(transaction: Transaction, accountCode: string): 'inflow' | 'outflow' {
+  // If amount is positive and account code is income-related, treat as inflow
   if (transaction.amount > 0) {
-    if (category.toLowerCase().includes('income') || category.toLowerCase().includes('revenue') || category.toLowerCase().includes('deposit') || category.toLowerCase().includes('refund') || category.toLowerCase().includes('credit')) {
+    if (['200', '220', '260', '270'].includes(accountCode)) {
       return 'inflow';
     }
     // ATM, Cash, Transfer, etc. with positive amount = inflow (deposit)
@@ -148,105 +204,121 @@ export function getInflowOutflow(transaction: Transaction, category: string): 'i
     }
     // Default: positive is inflow
     return 'inflow';
-  } else {
-    // Negative amount
-    if (category.toLowerCase().includes('expense') || category.toLowerCase().includes('fee') || category.toLowerCase().includes('withdrawal') || category.toLowerCase().includes('purchase') || category.toLowerCase().includes('payment')) {
-      return 'outflow';
-    }
-    // ATM, Cash, Transfer, etc. with negative amount = outflow (withdrawal)
-    if (["atm", "cash", "transfer", "debit card", "miscellaneous", "purchase"].includes((transaction.description || '').toLowerCase())) {
+  }
+  
+  // If amount is negative and account code is expense-related, treat as outflow
+  if (transaction.amount < 0) {
+    if (['310', '400', '404', '408', '412', '416', '420', '425', '433', '437', '442', '449', '453', '455', '469', '473', '477', '482', '485', '487', '489', '493', '505'].includes(accountCode)) {
       return 'outflow';
     }
     // Default: negative is outflow
     return 'outflow';
   }
+  
+  // Zero amount - determine based on account code
+  if (['200', '220', '260', '270'].includes(accountCode)) {
+    return 'inflow';
+  } else if (['310', '400', '404', '408', '412', '416', '420', '425', '433', '437', '442', '449', '453', '455', '469', '473', '477', '482', '485', '487', '489', '493', '505'].includes(accountCode)) {
+    return 'outflow';
+  }
+  
+  // Default fallback
+  return transaction.amount >= 0 ? 'inflow' : 'outflow';
 }
 
-export class AIEngine {
-  private chartOfAccounts: ChartOfAccounts;
-  private userCorrections: Map<string, string> = new Map();
-  private categoryUsage: Map<string, number> = new Map();
-  private learnedPatterns: Map<string, { category: string; confidence: number; usageCount: number; lastUsed: Date }> = new Map();
-  private similarTransactionRules: Map<string, { pattern: string; category: string; accountCode?: string; confidence: number; usageCount: number }> = new Map();
 
-  constructor(province: string = 'ON') {
-    this.chartOfAccounts = new ChartOfAccounts(province);
+
+export class AIEngine {
+  private province: string;
+  private chartOfAccounts: ChartOfAccounts;
+  private databaseService: DatabaseService;
+  public userId?: string; // Make userId accessible for API calls
+  
+  // Keep local patterns for performance, but sync with database
+  private learnedPatterns: Map<string, { category: string; confidence: number; usageCount: number; lastUsed: Date }> = new Map();
+  private userCorrections: Map<string, string> = new Map();
+  private similarTransactionRules: Map<string, { category: string; confidence: number; usageCount: number; lastUsed: Date }> = new Map();
+  private categoryUsage: Map<string, number> = new Map(); // Track category usage
+  private customKeywordManager: CustomKeywordManager;
+  private fuse: Fuse<any> | null = null; // Fuse.js instance for fuzzy matching
+
+  constructor(province: string = 'ON', userId?: string, organizationId?: string) {
+    this.province = province;
+    this.userId = userId; // Store userId for API calls
+    // Use singleton Chart of Accounts instance to prevent multiple initializations
+    this.chartOfAccounts = ChartOfAccounts.getInstance(province);
+    this.databaseService = DatabaseService.getInstance();
+    this.customKeywordManager = CustomKeywordManager.getInstance();
+    // Always try to load learned data (the service will handle authentication internally)
     this.loadLearnedData();
+    this.initializeFuse(); // Initialize Fuse.js
   }
 
   /**
    * Initialize the AI engine and wait for chart of accounts to load
    */
   async initialize(): Promise<void> {
-    await this.chartOfAccounts.waitForInitialization();
+    // ChartOfAccounts is always ready, just load learned data
+    await this.loadLearnedData();
   }
 
   /**
-   * Load learned data from localStorage
+   * Load learned data from database
    */
-  private loadLearnedData(): void {
+  private async loadLearnedData(): Promise<void> {
     try {
-      // Only run on client side
-      if (typeof window === 'undefined') {
+      // Skip if no user ID
+      if (!this.userId) {
+        // No user ID, skipping database load
+        this.loadLearnedDataFromStorage();
         return;
       }
 
-      // Load user corrections
-      const savedCorrections = localStorage.getItem('meridian_user_corrections');
-      if (savedCorrections) {
-        const corrections = JSON.parse(savedCorrections);
-        this.userCorrections = new Map(Object.entries(corrections));
+      const patterns = await this.databaseService.getLearnedPatterns();
+      
+      // Clear existing patterns
+      this.learnedPatterns.clear();
+      
+      // Load patterns from database
+      for (const pattern of patterns) {
+        this.learnedPatterns.set(pattern.pattern, {
+          category: pattern.category_code,
+          confidence: pattern.confidence,
+          usageCount: pattern.usage_count,
+          lastUsed: new Date(pattern.last_used)
+        });
       }
-
-      // Load learned patterns
-      const savedPatterns = localStorage.getItem('meridian_learned_patterns');
-      if (savedPatterns) {
-        const patterns = JSON.parse(savedPatterns);
-        this.learnedPatterns = new Map(Object.entries(patterns));
-      }
-
-      // Load similar transaction rules (from cycle emoji actions)
-      const savedRules = localStorage.getItem('meridian_similar_rules');
-      if (savedRules) {
-        const rules = JSON.parse(savedRules);
-        this.similarTransactionRules = new Map(Object.entries(rules));
-      }
-
-      console.log('🧠 Loaded learned data:', {
-        corrections: this.userCorrections.size,
-        patterns: this.learnedPatterns.size,
-        rules: this.similarTransactionRules.size
-      });
+      
+      console.log('✅ Loaded learned data from database:', patterns.length, 'patterns');
     } catch (error) {
-      console.warn('⚠️ Error loading learned data:', error);
+      console.error('Failed to load learned data from database:', error);
+      // Fallback to localStorage if database fails
+      this.loadLearnedDataFromStorage();
     }
   }
 
   /**
-   * Save learned data to localStorage
+   * Save learned data to database (called periodically)
    */
-  private saveLearnedData(): void {
+  private async saveLearnedData(): Promise<void> {
     try {
-      // Only run on client side
-      if (typeof window === 'undefined') {
+      // Skip if no user ID
+      if (!this.userId) {
+        console.log('⚠️ No user ID, skipping database save - using localStorage instead');
+        this.saveLearnedDataToStorage();
         return;
       }
 
-      // Save user corrections
-      const correctionsObj = Object.fromEntries(this.userCorrections);
-      localStorage.setItem('meridian_user_corrections', JSON.stringify(correctionsObj));
-
-      // Save learned patterns
-      const patternsObj = Object.fromEntries(this.learnedPatterns);
-      localStorage.setItem('meridian_learned_patterns', JSON.stringify(patternsObj));
-
-      // Save similar transaction rules
-      const rulesObj = Object.fromEntries(this.similarTransactionRules);
-      localStorage.setItem('meridian_similar_rules', JSON.stringify(rulesObj));
-
-      console.log('💾 Saved learned data');
+      // Save all learned patterns to database
+      for (const [pattern, data] of this.learnedPatterns.entries()) {
+        await this.databaseService.saveLearnedPattern(pattern, data.category, data.confidence);
+      }
+      
+      console.log('✅ Saved learned data to database');
     } catch (error) {
-      console.warn('⚠️ Error saving learned data:', error);
+      console.error('Failed to save learned data to database:', error);
+      // Fallback to localStorage
+      this.saveLearnedDataToStorage();
     }
   }
 
@@ -259,37 +331,84 @@ export class AIEngine {
     accountCode: string;
     inflowOutflow: 'inflow' | 'outflow';
   } {
-    const description = transaction.originalDescription || transaction.description;
-    const amount = Math.abs(transaction.amount);
-    const isPositive = transaction.amount > 0;
+    const description = transaction.description || '';
+    const amount = transaction.amount;
+    const isPositive = amount > 0;
 
-    console.log(`🔍 Categorizing: "${description}" (${transaction.amount})`);
+    console.log(`🔍 Categorizing: "${description}" (${amount})`);
 
-    // 1. Check learned patterns first (highest priority)
-    const learnedMatch = this.findLearnedPattern(description);
-    if (learnedMatch) {
-      console.log(`🧠 Learned pattern match: ${learnedMatch.category} (${learnedMatch.confidence}%)`);
+    // Helper function to determine inflow/outflow
+    const getInflowOutflow = (transaction: Transaction, accountCode: string): 'inflow' | 'outflow' => {
+      if (isPositive) return 'inflow';
+      if (['200', '220', '260', '270'].includes(accountCode)) {
+        return 'inflow';
+      }
+      return 'outflow';
+    };
+
+    // 0. Use unified pattern engine FIRST (highest priority)
+    const unifiedResult = unifiedPatternEngine.categorize(transaction);
+    if (unifiedResult.confidence >= 85) {
+      console.log(`✅ Unified pattern matched: ${unifiedResult.category} (${unifiedResult.confidence}%)`);
       return {
-        category: learnedMatch.category,
-        confidence: learnedMatch.confidence,
-        accountCode: learnedMatch.accountCode || this.getAccountCode(learnedMatch.category, amount),
-        inflowOutflow: getInflowOutflow(transaction, learnedMatch.category)
+        category: unifiedResult.category,
+        confidence: unifiedResult.confidence,
+        accountCode: unifiedResult.accountCode,
+        inflowOutflow: unifiedResult.inflowOutflow
       };
     }
 
-    // 2. Check user corrections
-    const userCorrection = this.userCorrections.get(description.toLowerCase());
-    if (userCorrection) {
-      console.log(`👤 User correction applied: ${userCorrection}`);
+    // 1. E-TRANSFER categorization - HIGHEST PRIORITY - intelligent context analysis
+    if (/(?:e[\-\s]*transfer|e[\-\s]*tfr|etfr|send\s+e[\-\s]*tfr|rcv\s+e[\-\s]*tfr)(?!\s*fee)/i.test(description.toLowerCase())) {
+      console.log(`🔍 E-TRANSFER detected: "${description}" - analyzing context...`);
+      
+      // Use intelligent context analysis instead of always marking as manual
+      const contextResult = this.analyzeETransferContext(description, transaction.amount);
+      if (contextResult) {
+        console.log(`✅ E-Transfer context analysis successful: ${contextResult.category} (${contextResult.confidence}%)`);
+        return {
+          category: contextResult.category,
+          confidence: contextResult.confidence,
+          accountCode: contextResult.accountCode,
+          inflowOutflow: transaction.amount > 0 ? 'inflow' : 'outflow'
+        };
+      } else {
+        // Only fallback to manual if no context found
+        console.log(`⚠️ E-Transfer context analysis failed - marking for manual review`);
+        return {
+          category: 'E-Transfer',
+          confidence: 25, // Low confidence indicates manual categorization required
+          accountCode: '883', // E-Transfer account code - user can change this
+          inflowOutflow: transaction.amount > 0 ? 'inflow' : 'outflow'
+        };
+      }
+    }
+
+    // 2. Check custom keywords (highest priority after e-transfers)
+    const customKeywordMatch = this.findKeywordMatch(description);
+    if (customKeywordMatch) {
+      console.log(`🔑 Custom keyword match: ${customKeywordMatch.accountCode} (${customKeywordMatch.confidence}%)`);
       return {
-        category: userCorrection,
-        confidence: 95,
-        accountCode: this.getAccountCode(userCorrection, amount),
-        inflowOutflow: getInflowOutflow(transaction, userCorrection)
+        category: customKeywordMatch.accountCode,
+        confidence: customKeywordMatch.confidence,
+        accountCode: customKeywordMatch.accountCode,
+        inflowOutflow: getInflowOutflow(transaction, customKeywordMatch.accountCode)
       };
     }
 
-    // 3. Check similar transaction rules (from cycle emoji actions)
+    // 3. Check learned patterns (user corrections)
+    const learnedPattern = this.findLearnedPattern(description);
+    if (learnedPattern) {
+      console.log(`🧠 Learned pattern: ${learnedPattern.category} (${learnedPattern.confidence}%)`);
+      return {
+        category: learnedPattern.category,
+        confidence: learnedPattern.confidence,
+        accountCode: learnedPattern.accountCode || this.getAccountCode(learnedPattern.category, amount),
+        inflowOutflow: getInflowOutflow(transaction, learnedPattern.category)
+      };
+    }
+
+    // 4. Check similar transaction rules
     const similarRule = this.findSimilarTransactionRule(description);
     if (similarRule) {
       console.log(`🔄 Similar transaction rule: ${similarRule.category} (${similarRule.confidence}%)`);
@@ -301,125 +420,90 @@ export class AIEngine {
       };
     }
 
-    // Special handling for E-TRANSFER based on amount
-    if (/e[\-\s]*transfer(?!\s*fee)/i.test(description.toLowerCase())) {
-      const category = isPositive ? 'Revenue' : 'Bank Related';
-      const subcategory = isPositive ? 'E-Transfer Income' : 'E-Transfer Out';
-      console.log(`✅ E-TRANSFER amount-based: ${category} (${subcategory})`);
-      return {
-        category,
-        confidence: 90,
-        accountCode: this.getAccountCode(category, amount),
-        inflowOutflow: getInflowOutflow(transaction, category)
-      };
-    }
-
-    // 1. Try bank transaction patterns first (highest priority)
+    // 5. Try bank transaction patterns (high priority for bank-related)
     const bankMatch = this.findBankPattern(description);
     if (bankMatch) {
-      const inflowOutflow = getInflowOutflow(transaction, bankMatch.category);
-      console.log(`✅ Bank pattern match: ${bankMatch.category} (${bankMatch.confidence}%)`);
+      const inflowOutflow = getInflowOutflow(transaction, bankMatch.accountCode);
+      console.log(`✅ Bank pattern match: ${bankMatch.merchant} (${bankMatch.confidence}%)`);
       return {
-        category: bankMatch.category,
+        category: bankMatch.merchant,
         confidence: bankMatch.confidence,
-        accountCode: this.getAccountCode(bankMatch.category, amount),
+        accountCode: bankMatch.accountCode,
         inflowOutflow
       };
     }
 
-    // 2. Try exact merchant pattern matching
+    // 6. Try exact merchant pattern matching
     const exactMatch = this.findExactPattern(description);
     if (exactMatch) {
-      console.log(`✅ Exact merchant match: ${exactMatch.category}`);
+      console.log(`✅ Exact merchant match: ${exactMatch.merchant} -> ${exactMatch.accountCode}`);
       return {
-        category: exactMatch.category,
+        category: 'Uncategorized', // We're moving away from categories
         confidence: 95,
-        accountCode: this.getAccountCode(exactMatch.category, amount),
-        inflowOutflow: getInflowOutflow(transaction, exactMatch.category)
+        accountCode: exactMatch.accountCode,
+        inflowOutflow: getInflowOutflow(transaction, exactMatch.accountCode)
       };
     }
 
-    // 3. Try fuzzy matching with merchant patterns
+    // 7. Try fuzzy matching with merchant patterns (improved)
     const fuzzyMatch = this.findFuzzyPattern(description);
     if (fuzzyMatch && fuzzyMatch.score < 0.3) {
-      console.log(`✅ Fuzzy merchant match: ${fuzzyMatch.category} (score: ${fuzzyMatch.score})`);
+      console.log(`✅ Fuzzy merchant match: ${fuzzyMatch.merchant} (score: ${fuzzyMatch.score})`);
       return {
-        category: fuzzyMatch.category,
+        category: fuzzyMatch.merchant,
         confidence: Math.max(70, 90 - (fuzzyMatch.score * 100)),
-        accountCode: this.getAccountCode(fuzzyMatch.category, amount),
-        inflowOutflow: getInflowOutflow(transaction, fuzzyMatch.category)
+        accountCode: this.getAccountCode(fuzzyMatch.merchant, amount),
+        inflowOutflow: getInflowOutflow(transaction, fuzzyMatch.merchant)
       };
     }
 
-    // 4. Try enhanced keyword-based categorization
-    const keywordMatch = this.findKeywordMatch(description);
-    if (keywordMatch) {
-      const inflowOutflow = getInflowOutflow(transaction, keywordMatch.category);
-      console.log(`✅ Keyword match: ${keywordMatch.category} (${keywordMatch.confidence}%)`);
+    // 8. Amount-based heuristics - COMPLETELY DISABLED
+    // const amountMatch = this.findAmountBasedCategory(amount);
+    // Amount-based categorization has been removed as it was too aggressive
+
+    // 9. Use unified pattern engine result even if lower confidence
+    if (unifiedResult.confidence > 0) {
+      console.log(`✅ Using unified pattern with lower confidence: ${unifiedResult.category} (${unifiedResult.confidence}%)`);
       return {
-        category: keywordMatch.category,
-        confidence: keywordMatch.confidence,
-        accountCode: this.getAccountCode(keywordMatch.category, amount),
-        inflowOutflow
+        category: unifiedResult.category,
+        confidence: unifiedResult.confidence,
+        accountCode: unifiedResult.accountCode,
+        inflowOutflow: unifiedResult.inflowOutflow
       };
     }
 
-    // 5. Try amount-based heuristics
-    const amountMatch = this.findAmountBasedCategory(amount);
-    if (amountMatch) {
-      const inflowOutflow = getInflowOutflow(transaction, amountMatch.category);
-      console.log(`⚠️ Amount-based fallback: ${amountMatch.category} (${amountMatch.confidence}%)`);
-      return {
-        category: amountMatch.category,
-        confidence: amountMatch.confidence,
-        accountCode: this.getAccountCode(amountMatch.category, amount),
-        inflowOutflow
-      };
-    }
-
-    // 6. Check user corrections
-    const correction = this.userCorrections.get(description.toLowerCase());
-    if (correction) {
-      console.log(`✅ User correction: ${correction}`);
-      return {
-        category: correction,
-        confidence: 85,
-        accountCode: this.getAccountCode(correction, amount),
-        inflowOutflow: getInflowOutflow(transaction, correction)
-      };
-    }
-
-    // Default to Suspense/Uncategorized for ambiguous cases
-    const inflowOutflow = transaction.amount > 0 ? 'inflow' : 'outflow';
+    // 10. Default fallback with low confidence
+    const defaultCategory = isPositive ? 'Revenue' : 'Uncategorized';
+    console.log(`❓ Default fallback: ${defaultCategory} (low confidence)`);
     return {
-      category: 'Suspense/Uncategorized',
-      confidence: 0,
-      accountCode: '',
-      inflowOutflow
+      category: defaultCategory,
+      confidence: 30, // Low confidence for unknown transactions
+      accountCode: this.getAccountCode(defaultCategory, amount),
+      inflowOutflow: getInflowOutflow(transaction, defaultCategory)
     };
   }
 
   /**
    * Find bank transaction patterns (NEW - from training data)
    */
-  private findBankPattern(description: string): { category: string; confidence: number } | null {
+  private findBankPattern(description: string): { accountCode: string; merchant: string; confidence: number } | null {
     const normalizedDesc = description.toLowerCase();
     
-    console.log(`🔍 Testing bank patterns for: "${normalizedDesc}"`);
+    // Testing bank patterns
     
-    // Special handling for E-TRANSFER based on amount
-    if (/e[\-\s]*transfer(?!\s*fee)/i.test(normalizedDesc)) {
-      // This will be handled in categorizeTransaction based on amount
-      console.log(`⚠️ E-TRANSFER detected, skipping bank patterns`);
+    // Special handling for E-TRANSFER - now requires manual entry
+    if (/(?:e[\-\s]*transfer|e[\-\s]*tfr|etfr|send\s+e[\-\s]*tfr|rcv\s+e[\-\s]*tfr)(?!\s*fee)/i.test(normalizedDesc)) {
+      console.log(`⚠️ E-TRANSFER detected, skipping bank patterns - requires manual entry`);
       return null;
     }
     
     for (const pattern of BANK_PATTERNS) {
       if (pattern.pattern.test(normalizedDesc)) {
-        console.log(`✅ Bank pattern matched: ${pattern.pattern.source} -> ${pattern.category}`);
-        this.incrementCategoryUsage(pattern.category);
+        console.log(`✅ Bank pattern matched: ${pattern.pattern.source} -> ${pattern.merchant}`);
+        this.incrementCategoryUsage(pattern.accountCode);
         return { 
-          category: pattern.category, 
+          accountCode: pattern.accountCode, 
+          merchant: pattern.merchant, 
           confidence: pattern.confidence 
         };
       }
@@ -432,10 +516,8 @@ export class AIEngine {
   /**
    * Categorize a batch of transactions
    */
-  async categorizeBatch(transactions: Transaction[]): Promise<Transaction[]> {
-    // Ensure chart of accounts is initialized before categorizing
-    await this.chartOfAccounts.waitForInitialization();
-    
+  categorizeBatch(transactions: Transaction[]): Transaction[] {
+    // Chart of accounts is always ready
     return transactions.map(t => {
       const result = this.categorizeTransaction(t);
       return {
@@ -451,13 +533,13 @@ export class AIEngine {
   /**
    * Find exact pattern match in merchant database
    */
-  private findExactPattern(description: string): { category: string } | null {
+  private findExactPattern(description: string): { accountCode: string; merchant: string } | null {
     const normalizedDesc = description.toLowerCase();
     
     for (const pattern of MERCHANT_PATTERNS) {
       if (pattern.pattern.test(normalizedDesc)) {
-        this.incrementCategoryUsage(pattern.category);
-        return { category: pattern.category };
+        this.incrementCategoryUsage(pattern.accountCode);
+        return { accountCode: pattern.accountCode, merchant: pattern.merchant };
       }
     }
     
@@ -465,22 +547,23 @@ export class AIEngine {
   }
 
   /**
-   * Find fuzzy pattern match using Fuse.js
+   * Find fuzzy pattern match using improved algorithms
    */
-  private findFuzzyPattern(description: string): { category: string; score: number } | null {
-    const fuse = new Fuse(MERCHANT_PATTERNS, {
-      keys: ['patterns'],
-      threshold: 0.4,
-      includeScore: true
-    });
-
-    const results = fuse.search(description);
-    if (results.length > 0) {
-      const bestMatch = results[0];
-      this.incrementCategoryUsage(bestMatch.item.category);
+  private findFuzzyPattern(description: string): { merchant: string; score: number } | null {
+    if (!this.fuse) return null;
+    
+    const results = this.fuse.search(description);
+    if (results.length === 0) return null;
+    
+    const bestMatch = results[0];
+    const score = bestMatch.score || 1;
+    
+    // Only return if score is good enough
+    if (score < 0.3) {
+      this.incrementCategoryUsage(bestMatch.item.merchant);
       return {
-        category: bestMatch.item.category,
-        score: bestMatch.score || 1
+        merchant: bestMatch.item.merchant,
+        score: score
       };
     }
     
@@ -488,73 +571,133 @@ export class AIEngine {
   }
 
   /**
+   * Calculate similarity between two strings using multiple algorithms
+   */
+  private calculateSimilarity(str1: string, str2: string): number {
+    // Jaro-Winkler similarity
+    const jaroWinkler = this.jaroWinklerSimilarity(str1, str2);
+    
+    // Levenshtein distance
+    const levenshtein = this.levenshteinDistance(str1, str2);
+    const maxLength = Math.max(str1.length, str2.length);
+    const levenshteinSimilarity = maxLength > 0 ? 1 - (levenshtein / maxLength) : 0;
+    
+    // Combine both algorithms
+    return (jaroWinkler + levenshteinSimilarity) / 2;
+  }
+
+  /**
+   * Jaro-Winkler similarity algorithm
+   */
+  private jaroWinklerSimilarity(s1: string, s2: string): number {
+    if (s1 === s2) return 1.0;
+    if (s1.length === 0 || s2.length === 0) return 0.0;
+    
+    const matchWindow = Math.floor(Math.max(s1.length, s2.length) / 2) - 1;
+    if (matchWindow < 0) return 0.0;
+    
+    const s1Matches = new Array(s1.length).fill(false);
+    const s2Matches = new Array(s2.length).fill(false);
+    
+    let matches = 0;
+    let transpositions = 0;
+    
+    // Find matches
+    for (let i = 0; i < s1.length; i++) {
+      const start = Math.max(0, i - matchWindow);
+      const end = Math.min(i + matchWindow + 1, s2.length);
+      
+      for (let j = start; j < end; j++) {
+        if (s2Matches[j] || s1[i] !== s2[j]) continue;
+        s1Matches[i] = true;
+        s2Matches[j] = true;
+        matches++;
+        break;
+      }
+    }
+    
+    if (matches === 0) return 0.0;
+    
+    // Find transpositions
+    let k = 0;
+    for (let i = 0; i < s1.length; i++) {
+      if (!s1Matches[i]) continue;
+      while (!s2Matches[k]) k++;
+      if (s1[i] !== s2[k]) transpositions++;
+      k++;
+    }
+    
+    const jaro = (matches / s1.length + matches / s2.length + (matches - transpositions / 2) / matches) / 3;
+    
+    // Winkler modification
+    let prefix = 0;
+    for (let i = 0; i < Math.min(4, Math.min(s1.length, s2.length)); i++) {
+      if (s1[i] === s2[i]) prefix++;
+      else break;
+    }
+    
+    return jaro + (prefix * 0.1 * (1 - jaro));
+  }
+
+  /**
+   * Levenshtein distance algorithm
+   */
+  private levenshteinDistance(str1: string, str2: string): number {
+    const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
+    
+    for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
+    for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
+    
+    for (let j = 1; j <= str2.length; j++) {
+      for (let i = 1; i <= str1.length; i++) {
+        const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1, // deletion
+          matrix[j - 1][i] + 1, // insertion
+          matrix[j - 1][i - 1] + indicator // substitution
+        );
+      }
+    }
+    
+    return matrix[str2.length][str1.length];
+  }
+
+  /**
    * Enhanced keyword-based matches (IMPROVED with training data)
    */
-  private findKeywordMatch(description: string): { category: string; confidence: number } | null {
+  private findKeywordMatch(description: string): { accountCode: string; confidence: number } | null {
     const normalizedDesc = description.toLowerCase();
     
-    // Enhanced keyword patterns with training data insights
-    const keywordPatterns = [
-      // Interest and Investment Income
-      { keywords: ['interest', 'dividend', 'investment income'], category: 'Interest Income', confidence: 90 },
-      
-      // Bank Fees and Charges
-      { keywords: ['fee', 'charge', 'service charge', 'monthly fee', 'plan fee'], category: 'Bank Fees', confidence: 85 },
-      
-      // Gas stations and fuel
-      { keywords: ['gas', 'fuel', 'petro', 'shell', 'esso', 'mobil', 'canadian tire gas'], category: 'Motor Vehicle Expenses', confidence: 85 },
-      
-      // Coffee and quick food
-      { keywords: ['coffee', 'starbucks', 'tim hortons', 'dunkin', 'subway'], category: 'Meals & Entertainment', confidence: 90 },
-      
-      // Restaurants and food
-      { keywords: ['restaurant', 'pizza', 'burger', 'swiss chalet', 'pizza hut', 'mcdonald'], category: 'Meals & Entertainment', confidence: 90 },
-      
-      // Retail and shopping
-      { keywords: ['walmart', 'costco', 'canadian tire', 'home depot', 'loblaws', 'metro', 'zehrs'], category: 'Office Supplies', confidence: 75 },
-      
-      // Pharmacy and health
-      { keywords: ['shoppers drug mart', 'pharmacy', 'medical'], category: 'Office Supplies', confidence: 80 },
-      
-      // Alcohol and liquor
-      { keywords: ['lcbo', 'liquor', 'beer', 'wine'], category: 'Meals & Entertainment', confidence: 85 },
-      
-      // Transportation
-      { keywords: ['uber', 'lyft', 'taxi', 'cab'], category: 'Motor Vehicle Expenses', confidence: 90 },
-      
-      // Technology and subscriptions
-      { keywords: ['netflix', 'spotify', 'apple', 'google'], category: 'Telecommunications', confidence: 85 },
-      
-      // Bank-related (general catch-all)
-      { keywords: ['bank', 'td', 'rbc', 'bmo', 'scotiabank'], category: 'Bank Fees', confidence: 80 },
-      
-      // Office supplies
-      { keywords: ['staples', 'office depot', 'best buy'], category: 'Office Supplies', confidence: 85 },
-      
-      // Point of sale patterns (from training data)
-      { keywords: ['point of sale purchase'], category: 'Meals & Entertainment', confidence: 70 },
-
-      // BT Records specific keywords (NEW)
-      { keywords: ['chq#', 'cheque'], category: 'General Expenses', confidence: 85 },
-      { keywords: ['iol', 'serviceontario'], category: 'General Expenses', confidence: 85 },
-      { keywords: ['stripe'], category: 'Revenue', confidence: 85 },
-      { keywords: ['mobile deposit'], category: 'Revenue', confidence: 85 },
-      { keywords: ['balance forward'], category: 'Bank Related', confidence: 85 },
-      { keywords: ['garage', 'auto parts'], category: 'Motor Vehicle Expenses', confidence: 85 },
-      { keywords: ['wawanesa'], category: 'Insurance', confidence: 85 },
-      { keywords: ['dominion'], category: 'General Expenses', confidence: 85 },
-      { keywords: ['bell canada'], category: 'Telecommunications', confidence: 85 },
-      { keywords: ['payroll'], category: 'Payroll', confidence: 85 },
-      { keywords: ['cra', 'tax'], category: 'Tax Payments', confidence: 85 }
-    ];
-
-    for (const pattern of keywordPatterns) {
-      if (pattern.keywords.some(keyword => normalizedDesc.includes(keyword))) {
-        this.incrementCategoryUsage(pattern.category);
-        return {
-          category: pattern.category,
-          confidence: pattern.confidence
+    // Check single keywords first (higher priority)
+    const keywords = this.customKeywordManager.getKeywords();
+    for (const keyword of keywords) {
+      if (normalizedDesc.includes(keyword.keyword.toLowerCase())) {
+        console.log(`✅ Keyword match: "${keyword.keyword}" -> ${keyword.accountCode}`);
+        this.incrementCategoryUsage(keyword.accountCode);
+        return { 
+          accountCode: keyword.accountCode, 
+          confidence: keyword.confidence || 85 
         };
+      }
+    }
+    
+    // Check multi-keyword rules
+    const rules = this.customKeywordManager.getRules();
+    for (const rule of rules) {
+      const matchCount = rule.keywords.filter((k: string) => normalizedDesc.includes(k.toLowerCase())).length;
+      if (matchCount > 0) {
+        // Calculate confidence based on how many keywords match
+        const matchRatio = matchCount / rule.keywords.length;
+        const adjustedConfidence = rule.confidence * matchRatio;
+        
+        if (adjustedConfidence >= 50) { // Minimum threshold
+          console.log(`✅ Rule match: "${rule.keywords.join(', ')}" -> ${rule.accountCode} (${adjustedConfidence.toFixed(1)}% confidence)`);
+          this.incrementCategoryUsage(rule.accountCode);
+          return { 
+            accountCode: rule.accountCode, 
+            confidence: adjustedConfidence 
+          };
+        }
       }
     }
     
@@ -565,46 +708,182 @@ export class AIEngine {
    * Enhanced amount-based categorization (IMPROVED)
    */
   private findAmountBasedCategory(amount: number): { category: string; confidence: number } | null {
-    // Enhanced amount-based heuristics from training data analysis
-    if (amount < 5) {
-      return { category: 'Bank Fees', confidence: 60 }; // Small amounts often bank fees
-    } else if (amount >= 5 && amount < 20) {
-      return { category: 'Meals & Entertainment', confidence: 55 }; // Coffee, fast food
-    } else if (amount >= 20 && amount < 100) {
-      return { category: 'Meals & Entertainment', confidence: 50 }; // Restaurant meals
-    } else if (amount >= 100 && amount < 500) {
-      return { category: 'Office Supplies', confidence: 45 }; // Shopping, supplies
-    } else if (amount >= 500 && amount < 2000) {
-      return { category: 'General Expenses', confidence: 30 }; // Services, equipment - lower confidence
-    } else if (amount >= 2000) {
-      return { category: 'General Expenses', confidence: 25 }; // Large expenses - much lower confidence
-    }
+    // Much more conservative amount-based heuristics
+    // Only apply when amount strongly suggests a specific category AND no other patterns matched
     
+    // Completely remove amount-based categorization as it's too aggressive
+    // All transactions should go through proper pattern matching or be marked as uncategorized
     return null;
   }
 
   /**
-   * Get account code for a category
+   * Get account code for a category with improved mapping
    */
   private getAccountCode(category: string, amount: number): string {
-    // Special handling for E-Transfers - no account code assigned
-    if (category === 'E-Transfer') {
-      return '';
+    try {
+      // Check if chart of accounts is available
+      const accounts = this.chartOfAccounts.getAllAccounts();
+      if (accounts.length === 0) {
+        console.warn('⚠️ Chart of accounts not initialized, using fallback account codes');
+        return this.getFallbackAccountCode(category, amount);
+      }
+
+      // Try to find account by category name first
+      const account = this.chartOfAccounts.findAccountByCategory(category);
+      if (account) {
+        console.log(`✅ Found account code ${account.code} for category: ${category}`);
+        return account.code;
+      }
+
+      // Enhanced category to account mapping
+      const categoryMapping: { [key: string]: string } = {
+        // Revenue accounts
+        'Revenue': '200',
+        'Sales Revenue': '200',
+        'Service Revenue': '220',
+        'Interest Income': '270',
+        'Investment Income': '270',
+        'Other Revenue': '260',
+        
+        // Expense accounts
+        'Office Supplies': '455',
+        'Software & Technology': '485',
+        'Telecommunications': '489',
+        'Insurance': '433',
+        'Motor Vehicle Expenses': '449',
+        'Meals & Entertainment': '420',
+        'Travel & Accommodation': '493',
+        'Bank Fees': '404',
+        'Rent': '469',
+        'Medical Expenses': '453',
+        'General Expenses': '453',
+        
+        // Asset accounts
+        'Cash': '610',
+        'Accounts Receivable': '620',
+        'Inventory': '630',
+        'Equipment': '640',
+        'Vehicles': '650',
+        
+        // Liability accounts
+        'Accounts Payable': '800',
+        'Sales Tax': '803',
+        'Income Tax Payable': '803',
+        
+        // Special categories
+        'E-Transfer': '610', // Cash account
+        'Cheques': '610', // Cash account
+        'Payroll': '477', // Payroll expense
+        'Tax Payments': '505', // Tax Payments
+        'Uncategorized': '' // Suspense account
+      };
+
+      // Check enhanced mapping
+      if (categoryMapping[category]) {
+        console.log(`✅ Using enhanced mapping: ${category} → ${categoryMapping[category]}`);
+        return categoryMapping[category];
+      }
+
+      // Try partial category matching
+      for (const [mappedCategory, accountCode] of Object.entries(categoryMapping)) {
+        if (category.toLowerCase().includes(mappedCategory.toLowerCase()) || 
+            mappedCategory.toLowerCase().includes(category.toLowerCase())) {
+          console.log(`✅ Partial match: ${category} → ${accountCode} (via ${mappedCategory})`);
+          return accountCode;
+        }
+      }
+
+      // Fallback based on amount and category type
+      return this.getFallbackAccountCode(category, amount);
+
+    } catch (error) {
+      console.error('❌ Error getting account code:', error);
+      return this.getFallbackAccountCode(category, amount);
     }
-    
-    const account = this.chartOfAccounts.findAccountByCategory(category);
-    return account ? account.code : '';
   }
 
   /**
-   * Record user correction for learning
+   * Get fallback account code when chart is not available
    */
-  recordUserCorrection(originalDescription: string, originalCategory: string, correctedCategory: string) {
-    const key = originalDescription.toLowerCase();
-    this.userCorrections.set(key, correctedCategory);
-    this.incrementCategoryUsage(correctedCategory);
-    console.log(`📝 Recorded user correction: "${originalDescription}" -> "${correctedCategory}"`);
-    this.saveLearnedData();
+  private getFallbackAccountCode(category: string, amount: number): string {
+    const isPositive = amount > 0;
+    
+    if (isPositive) {
+      // Income/Revenue accounts
+      if (category.toLowerCase().includes('revenue') || category.toLowerCase().includes('income')) {
+        return '200'; // Sales Revenue
+      }
+      if (category.toLowerCase().includes('interest')) {
+        return '270'; // Interest Income
+      }
+      if (category.toLowerCase().includes('transfer') || category.toLowerCase().includes('deposit')) {
+        return '610'; // Cash
+      }
+      return '200'; // Default to Sales Revenue
+    } else {
+      // Expense accounts
+      if (category.toLowerCase().includes('office') || category.toLowerCase().includes('supplies')) {
+        return '455'; // Office Supplies
+      }
+      if (category.toLowerCase().includes('software') || category.toLowerCase().includes('tech')) {
+        return '485'; // Software & Technology
+      }
+      if (category.toLowerCase().includes('phone') || category.toLowerCase().includes('internet')) {
+        return '489'; // Telecommunications
+      }
+      if (category.toLowerCase().includes('insurance')) {
+        return '433'; // Insurance
+      }
+      if (category.toLowerCase().includes('vehicle') || category.toLowerCase().includes('gas') || category.toLowerCase().includes('fuel')) {
+        return '449'; // Motor Vehicle Expenses
+      }
+      if (category.toLowerCase().includes('meal') || category.toLowerCase().includes('food') || category.toLowerCase().includes('entertainment')) {
+        return '420'; // Meals & Entertainment
+      }
+      if (category.toLowerCase().includes('travel')) {
+        return '493'; // Travel & Accommodation
+      }
+      if (category.toLowerCase().includes('bank') || category.toLowerCase().includes('fee')) {
+        return '404'; // Bank Fees
+      }
+      if (category.toLowerCase().includes('rent')) {
+        return '469'; // Rent
+      }
+      if (category.toLowerCase().includes('medical')) {
+        return '453'; // Medical Expenses
+      }
+      return '453'; // Default to General Expenses
+    }
+  }
+
+  /**
+   * Record user correction and save to database
+   */
+  async recordUserCorrection(originalDescription: string, correctedCategoryCode: string): Promise<void> {
+    try {
+      // Save to database (the service will handle authentication internally)
+      await this.databaseService.recordUserCorrection(originalDescription, correctedCategoryCode);
+      
+      // Create learned pattern
+      const pattern = this.createPattern(originalDescription);
+      await this.databaseService.saveLearnedPattern(pattern, correctedCategoryCode, 90);
+      
+      // Update local cache
+      this.userCorrections.set(originalDescription, correctedCategoryCode);
+      this.learnedPatterns.set(pattern, {
+        category: correctedCategoryCode,
+        confidence: 90,
+        usageCount: 1,
+        lastUsed: new Date()
+      });
+      
+      console.log('📝 Recorded user correction:', originalDescription, '->', correctedCategoryCode);
+      console.log('📝 Added to learned patterns:', pattern, '->', correctedCategoryCode);
+    } catch (error) {
+      console.error('Failed to record user correction:', error);
+      // Fallback to localStorage
+      this.recordUserCorrectionToStorage(originalDescription, correctedCategoryCode);
+    }
   }
 
   /**
@@ -625,11 +904,10 @@ export class AIEngine {
     } else {
       // Create new rule
       this.similarTransactionRules.set(ruleKey, {
-        pattern,
         category,
-        accountCode,
         confidence: 85,
-        usageCount: similarTransactions.length
+        usageCount: similarTransactions.length,
+        lastUsed: new Date()
       });
     }
 
@@ -649,26 +927,19 @@ export class AIEngine {
   }
 
   /**
-   * Create a pattern from a description for learning
-   */
-  private createPatternFromDescription(description: string): string {
-    // Normalize the description for pattern matching
-    return description
-      .toLowerCase()
-      .replace(/\d+/g, '#') // Replace numbers with #
-      .replace(/[^\w\s#]/g, '') // Remove special characters
-      .trim();
-  }
-
-  /**
    * Find learned pattern match
    */
   private findLearnedPattern(description: string): { category: string; confidence: number; accountCode?: string } | null {
     const normalizedDesc = this.createPatternFromDescription(description);
     
+    console.log(`🧠 Checking learned patterns for: "${normalizedDesc}"`);
+    console.log(`🧠 Available patterns: ${this.learnedPatterns.size}`);
+    
     // Check for exact matches first
     for (const [pattern, data] of this.learnedPatterns) {
+      console.log(`🧠 Checking pattern: "${pattern}" vs "${normalizedDesc}"`);
       if (pattern === normalizedDesc) {
+        console.log(`🧠 EXACT MATCH FOUND: ${data.category} (${data.confidence}%)`);
         return {
           category: data.category,
           confidence: data.confidence,
@@ -680,6 +951,7 @@ export class AIEngine {
     // Check for partial matches
     for (const [pattern, data] of this.learnedPatterns) {
       if (normalizedDesc.includes(pattern) || pattern.includes(normalizedDesc)) {
+        console.log(`🧠 PARTIAL MATCH FOUND: ${data.category} (${data.confidence}%)`);
         return {
           category: data.category,
           confidence: Math.max(70, data.confidence - 10),
@@ -688,6 +960,7 @@ export class AIEngine {
       }
     }
 
+    console.log(`🧠 No learned pattern found`);
     return null;
   }
 
@@ -701,8 +974,7 @@ export class AIEngine {
       if (normalizedDesc.includes(pattern) || pattern.includes(normalizedDesc)) {
         return {
           category: rule.category,
-          confidence: rule.confidence,
-          accountCode: rule.accountCode
+          confidence: rule.confidence
         };
       }
     }
@@ -713,9 +985,9 @@ export class AIEngine {
   /**
    * Increment category usage counter
    */
-  private incrementCategoryUsage(category: string) {
-    const current = this.categoryUsage.get(category) || 0;
-    this.categoryUsage.set(category, current + 1);
+  private incrementCategoryUsage(accountCode: string) {
+    const current = this.categoryUsage.get(accountCode) || 0;
+    this.categoryUsage.set(accountCode, current + 1);
   }
 
   /**
@@ -725,21 +997,21 @@ export class AIEngine {
     return Array.from(this.categoryUsage.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
-      .map(([category]) => category);
+      .map(([accountCode]) => accountCode);
   }
 
   /**
    * Get user corrections
    */
   getUserCorrections(): Map<string, string> {
-    return new Map(this.userCorrections);
+    return this.userCorrections;
   }
 
   /**
    * Get bank pattern statistics (NEW)
    */
   getBankPatternStats(): { totalPatterns: number; categories: string[] } {
-    const categories = [...new Set(BANK_PATTERNS.map(p => p.category))];
+    const categories = [...new Set(BANK_PATTERNS.map(p => p.merchant))];
     return {
       totalPatterns: BANK_PATTERNS.length,
       categories
@@ -767,11 +1039,384 @@ export class AIEngine {
   }
 
   /**
+   * Debug method to get all learned patterns (for testing)
+   */
+  debugGetLearnedPatterns(): Array<{ pattern: string; category: string; confidence: number; usageCount: number }> {
+    return Array.from(this.learnedPatterns.entries()).map(([pattern, data]) => ({
+      pattern,
+      category: data.category,
+      confidence: data.confidence,
+      usageCount: data.usageCount
+    }));
+  }
+
+  /**
+   * Debug method to test pattern matching for a specific description
+   */
+  debugTestPattern(description: string): {
+    normalizedDescription: string;
+    learnedPatterns: Array<{ pattern: string; category: string; confidence: number }>;
+    matches: Array<{ pattern: string; category: string; confidence: number; matchType: string }>;
+  } {
+    const normalizedDesc = this.createPatternFromDescription(description);
+    const allPatterns = this.debugGetLearnedPatterns();
+    const matches: Array<{ pattern: string; category: string; confidence: number; matchType: string }> = [];
+
+    for (const patternData of allPatterns) {
+      if (patternData.pattern === normalizedDesc) {
+        matches.push({ ...patternData, matchType: 'EXACT' });
+      } else if (normalizedDesc.includes(patternData.pattern) || patternData.pattern.includes(normalizedDesc)) {
+        matches.push({ ...patternData, matchType: 'PARTIAL' });
+      }
+    }
+
+    return {
+      normalizedDescription: normalizedDesc,
+      learnedPatterns: allPatterns,
+      matches
+    };
+  }
+
+  /**
    * Test if a description matches bank patterns (NEW - for debugging)
    */
   testBankPattern(description: string): { matches: any[]; bestMatch: any | null } {
     const matches = BANK_PATTERNS.filter(p => p.pattern.test(description.toLowerCase()));
     const bestMatch = matches.length > 0 ? matches[0] : null;
     return { matches, bestMatch };
+  }
+
+  /**
+   * Initialize Fuse.js for fuzzy matching
+   */
+  private initializeFuse(): void {
+    this.fuse = new Fuse(MERCHANT_PATTERNS, {
+      keys: ['merchant'],
+      threshold: 0.3, // Lower threshold for more precise matches
+      includeScore: true,
+      minMatchCharLength: 3,
+      distance: 100, // Allow for more distance
+      ignoreLocation: true, // Ignore location for better matching
+      useExtendedSearch: true
+    });
+  }
+
+  /**
+   * Enhanced account code suggestions based on transaction amount patterns
+   */
+  private getAmountBasedAccountCode(amount: number): string | null {
+    const absAmount = Math.abs(amount);
+    
+    // Very small amounts (likely fees)
+    if (absAmount <= 5) {
+      return '404'; // Bank fees, service charges
+    }
+    
+    // Common subscription amounts (exact matches)
+    const subscriptionAmounts = [9.99, 12.99, 14.99, 19.99, 24.99, 29.99, 39.99, 49.99, 59.99, 79.99, 99.99];
+    if (subscriptionAmounts.includes(absAmount)) {
+      return '485'; // Subscriptions
+    }
+    
+    // Common gas amounts (usually between $20-$150, often round numbers or .99)
+    if (absAmount >= 20 && absAmount <= 150) {
+      // Check if it's a typical gas amount (often ends in .99 or is a round number)
+      const isRoundNumber = absAmount % 1 === 0;
+      const endsIn99 = absAmount % 1 === 0.99;
+      if (isRoundNumber || endsIn99) {
+        return '449'; // Motor Vehicle Expenses (gas)
+      }
+    }
+    
+    // Common grocery amounts (usually between $30-$200)
+    if (absAmount >= 30 && absAmount <= 200) {
+      // Grocery amounts are often not round numbers
+      if (absAmount % 1 !== 0) {
+        return '453'; // Office Expenses (general purchases)
+      }
+    }
+    
+    // Common restaurant amounts (usually between $15-$100)
+    if (absAmount >= 15 && absAmount <= 100) {
+      // Restaurant amounts often end in .00, .50, or .99
+      const lastTwoDigits = Math.round((absAmount % 1) * 100);
+      if (lastTwoDigits === 0 || lastTwoDigits === 50 || lastTwoDigits === 99) {
+        return '420'; // Entertainment (restaurants)
+      }
+    }
+    
+    // Large amounts (likely transfers, payments, or deposits)
+    if (absAmount >= 1000) {
+      // Round numbers in large amounts are likely transfers
+      if (absAmount % 100 === 0) {
+        return '404'; // Bank fees (transfers)
+      }
+      // Non-round large amounts might be payments
+      return '404'; // Bank fees (payments)
+    }
+    
+    // Medium amounts (likely regular purchases)
+    if (absAmount >= 50 && absAmount < 1000) {
+      return '453'; // Office Expenses (general purchases)
+    }
+    
+    return null;
+  }
+
+  /**
+   * Enhanced pattern matching for Canadian banks
+   */
+  private findCanadianBankPattern(description: string): { accountCode: string; merchant: string; confidence: number } | null {
+    const normalizedDesc = description.toLowerCase();
+    
+    // Canadian bank patterns
+    const bankPatterns = [
+      { pattern: /td\s*canada\s*trust/i, accountCode: '404', merchant: 'TD Canada Trust', confidence: 95 },
+      { pattern: /royal\s*bank\s*of\s*canada/i, accountCode: '404', merchant: 'RBC', confidence: 95 },
+      { pattern: /rbc/i, accountCode: '404', merchant: 'RBC', confidence: 95 },
+      { pattern: /bank\s*of\s*montreal/i, accountCode: '404', merchant: 'BMO', confidence: 95 },
+      { pattern: /bmo/i, accountCode: '404', merchant: 'BMO', confidence: 95 },
+      { pattern: /scotiabank/i, accountCode: '404', merchant: 'Scotiabank', confidence: 95 },
+      { pattern: /cibc/i, accountCode: '404', merchant: 'CIBC', confidence: 95 },
+      { pattern: /canadian\s*imperial\s*bank/i, accountCode: '404', merchant: 'CIBC', confidence: 95 },
+      { pattern: /national\s*bank/i, accountCode: '404', merchant: 'National Bank', confidence: 95 },
+      { pattern: /hsbc\s*canada/i, accountCode: '404', merchant: 'HSBC Canada', confidence: 95 },
+      { pattern: /hsbc/i, accountCode: '404', merchant: 'HSBC', confidence: 95 },
+      { pattern: /tangerine/i, accountCode: '404', merchant: 'Tangerine', confidence: 95 },
+      { pattern: /pc\s*financial/i, accountCode: '404', merchant: 'PC Financial', confidence: 95 },
+      { pattern: /simplii\s*financial/i, accountCode: '404', merchant: 'Simplii Financial', confidence: 95 },
+      { pattern: /eq\s*bank/i, accountCode: '404', merchant: 'EQ Bank', confidence: 95 },
+      { pattern: /alterna\s*bank/i, accountCode: '404', merchant: 'Alterna Bank', confidence: 95 },
+      { pattern: /motive\s*financial/i, accountCode: '404', merchant: 'Motive Financial', confidence: 95 },
+      { pattern: /outlook\s*financial/i, accountCode: '404', merchant: 'Outlook Financial', confidence: 95 },
+      { pattern: /duca\s*credit\s*union/i, accountCode: '404', merchant: 'DUCA Credit Union', confidence: 95 },
+      { pattern: /vancity/i, accountCode: '404', merchant: 'Vancity', confidence: 95 },
+      { pattern: /coast\s*capital/i, accountCode: '404', merchant: 'Coast Capital', confidence: 95 },
+      { pattern: /servus\s*credit\s*union/i, accountCode: '404', merchant: 'Servus Credit Union', confidence: 95 },
+      { pattern: /affinity\s*credit\s*union/i, accountCode: '404', merchant: 'Affinity Credit Union', confidence: 95 },
+      { pattern: /assiniboine\s*credit\s*union/i, accountCode: '404', merchant: 'Assiniboine Credit Union', confidence: 95 },
+      { pattern: /cambrian\s*credit\s*union/i, accountCode: '404', merchant: 'Cambrian Credit Union', confidence: 95 },
+      { pattern: /crosstown\s*credit\s*union/i, accountCode: '404', merchant: 'Crosstown Credit Union', confidence: 95 },
+      { pattern: /crystal\s*credit\s*union/i, accountCode: '404', merchant: 'Crystal Credit Union', confidence: 95 },
+      { pattern: /east\s*kootenay\s*community\s*credit\s*union/i, accountCode: '404', merchant: 'East Kootenay Community Credit Union', confidence: 95 },
+      { pattern: /first\s*ontario\s*credit\s*union/i, accountCode: '404', merchant: 'First Ontario Credit Union', confidence: 95 },
+      { pattern: /g&f\s*financial\s*group/i, accountCode: '404', merchant: 'G&F Financial Group', confidence: 95 },
+      { pattern: /gulf\s*islands\s*credit\s*union/i, accountCode: '404', merchant: 'Gulf Islands Credit Union', confidence: 95 },
+      { pattern: /innovation\s*credit\s*union/i, accountCode: '404', merchant: 'Innovation Credit Union', confidence: 95 },
+      { pattern: /libro\s*credit\s*union/i, accountCode: '404', merchant: 'Libro Credit Union', confidence: 95 },
+      { pattern: /northern\s*savings\s*credit\s*union/i, accountCode: '404', merchant: 'Northern Savings Credit Union', confidence: 95 },
+      { pattern: /north\s*peace\s*savings\s*and\s*credit\s*union/i, accountCode: '404', merchant: 'North Peace Savings and Credit Union', confidence: 95 },
+      { pattern: /omista\s*credit\s*union/i, accountCode: '404', merchant: 'Omista Credit Union', confidence: 95 },
+      { pattern: /pacific\s*coast\s*savings\s*credit\s*union/i, accountCode: '404', merchant: 'Pacific Coast Savings Credit Union', confidence: 95 },
+      { pattern: /peace\s*hills\s*trust/i, accountCode: '404', merchant: 'Peace Hills Trust', confidence: 95 },
+      { pattern: /prospera\s*credit\s*union/i, accountCode: '404', merchant: 'Prospera Credit Union', confidence: 95 },
+      { pattern: /saskatchewan\s*credit\s*unions/i, accountCode: '404', merchant: 'Saskatchewan Credit Unions', confidence: 95 },
+      { pattern: /steinbach\s*credit\s*union/i, accountCode: '404', merchant: 'Steinbach Credit Union', confidence: 95 },
+      { pattern: /sunova\s*credit\s*union/i, accountCode: '404', merchant: 'Sunova Credit Union', confidence: 95 },
+      { pattern: /valley\s*first\s*credit\s*union/i, accountCode: '404', merchant: 'Valley First Credit Union', confidence: 95 },
+      { pattern: /westoba\s*credit\s*union/i, accountCode: '404', merchant: 'Westoba Credit Union', confidence: 95 },
+      { pattern: /windsor\s*family\s*credit\s*union/i, accountCode: '404', merchant: 'Windsor Family Credit Union', confidence: 95 },
+    ];
+    
+    for (const pattern of bankPatterns) {
+      if (pattern.pattern.test(normalizedDesc)) {
+        console.log(`🏦 Canadian bank pattern matched: ${pattern.merchant}`);
+        return pattern;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Load learned patterns from frontend for backend processing
+   */
+  loadLearnedPatternsFromFrontend(patterns: Record<string, any>): void {
+    console.log('🧠 Loading learned patterns from frontend:', Object.keys(patterns).length, 'patterns');
+    
+    for (const [pattern, data] of Object.entries(patterns)) {
+      if (data && typeof data === 'object' && data.category && data.confidence) {
+        this.learnedPatterns.set(pattern, {
+          category: data.category,
+          confidence: data.confidence,
+          usageCount: data.usageCount || 1,
+          lastUsed: new Date()
+        });
+        console.log(`🧠 Loaded pattern: "${pattern}" -> ${data.category} (${data.confidence}%)`);
+      }
+    }
+  }
+
+  /**
+   * Load learned data from localStorage (fallback)
+   */
+  private loadLearnedDataFromStorage(): void {
+    try {
+      // Only run on client side
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      // Load user corrections
+      const savedCorrections = localStorage.getItem('meridian_user_corrections');
+      if (savedCorrections) {
+        const corrections = JSON.parse(savedCorrections);
+        this.userCorrections = new Map(Object.entries(corrections));
+      }
+
+      // Load learned patterns
+      const savedPatterns = localStorage.getItem('meridian_learned_patterns');
+      if (savedPatterns) {
+        const patterns = JSON.parse(savedPatterns);
+        this.learnedPatterns = new Map(Object.entries(patterns));
+      }
+
+      console.log('🧠 Loaded learned data from localStorage (fallback)');
+    } catch (error) {
+      console.warn('⚠️ Error loading learned data from localStorage:', error);
+    }
+  }
+
+  /**
+   * Save learned data to localStorage (fallback)
+   */
+  private saveLearnedDataToStorage(): void {
+    try {
+      // Only run on client side
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      // Save user corrections
+      const correctionsObj = Object.fromEntries(this.userCorrections);
+      localStorage.setItem('meridian_user_corrections', JSON.stringify(correctionsObj));
+
+      // Save learned patterns
+      const patternsObj = Object.fromEntries(this.learnedPatterns);
+      localStorage.setItem('meridian_learned_patterns', JSON.stringify(patternsObj));
+
+      console.log('💾 Saved learned data to localStorage (fallback)');
+    } catch (error) {
+      console.warn('⚠️ Error saving learned data to localStorage:', error);
+    }
+  }
+
+  /**
+   * Record user correction to localStorage (fallback)
+   */
+  private recordUserCorrectionToStorage(originalDescription: string, correctedCategoryCode: string): void {
+    const key = originalDescription.toLowerCase();
+    this.userCorrections.set(key, correctedCategoryCode);
+    
+    // Create learned pattern
+    const pattern = this.createPatternFromDescription(originalDescription);
+    this.learnedPatterns.set(pattern, {
+      category: correctedCategoryCode,
+      confidence: 90,
+      usageCount: 1,
+      lastUsed: new Date()
+    });
+    
+    console.log('📝 Recorded user correction to localStorage:', originalDescription, '->', correctedCategoryCode);
+    this.saveLearnedDataToStorage();
+  }
+
+  /**
+   * Create a pattern from a description for learning
+   */
+  private createPatternFromDescription(description: string): string {
+    // Normalize the description for pattern matching
+    return description
+      .toLowerCase()
+      .replace(/\d+/g, '#') // Replace numbers with #
+      .replace(/[^\w\s#]/g, '') // Remove special characters
+      .trim();
+  }
+
+  /**
+   * Create pattern from description (alias for compatibility)
+   */
+  private createPattern(description: string): string {
+    return this.createPatternFromDescription(description);
+  }
+
+  /**
+   * Analyze E-Transfer context to intelligently categorize based on purpose
+   */
+  private analyzeETransferContext(description: string, amount: number): { category: string; confidence: number; accountCode: string } | null {
+    const normalizedDesc = description.toLowerCase();
+    
+    // Context patterns for intelligent categorization
+    const contextPatterns = [
+      // Business/Professional Services
+      { patterns: [/repair/i, /service/i, /maintenance/i, /fix/i], category: 'Professional Services', accountCode: '463', confidence: 85 },
+      { patterns: [/contractor/i, /plumber/i, /electrician/i, /handyman/i], category: 'Professional Services', accountCode: '463', confidence: 90 },
+      
+      // Rent and Property
+      { patterns: [/rent/i, /rental/i, /lease/i], category: 'Rent', accountCode: '620', confidence: 90 },
+      { patterns: [/property/i, /apartment/i, /condo/i], category: 'Rent', accountCode: '620', confidence: 80 },
+      
+      // Utilities
+      { patterns: [/hydro/i, /electric/i, /gas/i, /water/i, /utility/i], category: 'Utilities', accountCode: '621', confidence: 85 },
+      { patterns: [/internet/i, /phone/i, /cable/i, /wifi/i], category: 'Utilities', accountCode: '621', confidence: 80 },
+      
+      // Personal/Family
+      { patterns: [/family/i, /friend/i, /personal/i, /gift/i], category: 'Personal', accountCode: '883', confidence: 75 },
+      { patterns: [/birthday/i, /wedding/i, /christmas/i, /holiday/i], category: 'Personal', accountCode: '883', confidence: 80 },
+      
+      // Business Expenses
+      { patterns: [/supplies/i, /equipment/i, /materials/i, /tools/i], category: 'Office Supplies', accountCode: '455', confidence: 80 },
+      { patterns: [/meeting/i, /conference/i, /training/i, /seminar/i], category: 'Professional Development', accountCode: '464', confidence: 85 },
+      
+      // Food/Entertainment
+      { patterns: [/restaurant/i, /food/i, /dinner/i, /lunch/i], category: 'Entertainment', accountCode: '420', confidence: 75 },
+      { patterns: [/coffee/i, /drink/i, /bar/i, /pub/i], category: 'Entertainment', accountCode: '420', confidence: 70 },
+      
+      // Loan/Investment
+      { patterns: [/loan/i, /payment/i, /debt/i, /owe/i], category: 'Loan Payment', accountCode: '900', confidence: 85 },
+      { patterns: [/invest/i, /savings/i, /deposit/i], category: 'Investment', accountCode: '610', confidence: 80 }
+    ];
+    
+    // Check for context patterns
+    for (const contextPattern of contextPatterns) {
+      const matchCount = contextPattern.patterns.filter(pattern => pattern.test(normalizedDesc)).length;
+      if (matchCount > 0) {
+        const confidence = Math.min(95, contextPattern.confidence + (matchCount - 1) * 5);
+        console.log(`🎯 E-Transfer context match: ${contextPattern.category} (${confidence}%)`);
+        return {
+          category: contextPattern.category,
+          confidence,
+          accountCode: contextPattern.accountCode
+        };
+      }
+    }
+    
+    // Check for recipient names/codes that might indicate purpose
+    const recipientPatterns = [
+      { pattern: /\b[A-Z]{2,3}\b/, category: 'Personal', accountCode: '883', confidence: 60 }, // Initials
+      { pattern: /\b\d{3,6}\b/, category: 'Business', accountCode: '404', confidence: 65 }, // Account numbers
+    ];
+    
+    for (const recipientPattern of recipientPatterns) {
+      if (recipientPattern.pattern.test(description)) {
+        console.log(`📋 E-Transfer recipient pattern: ${recipientPattern.category} (${recipientPattern.confidence}%)`);
+        return {
+          category: recipientPattern.category,
+          confidence: recipientPattern.confidence,
+          accountCode: recipientPattern.accountCode
+        };
+      }
+    }
+    
+    // Amount-based heuristics for e-transfers
+    if (amount > 1000) {
+      return { category: 'Business Payment', accountCode: '404', confidence: 70 };
+    } else if (amount > 500) {
+      return { category: 'Professional Services', accountCode: '463', confidence: 65 };
+    } else if (amount > 100) {
+      return { category: 'Personal', accountCode: '883', confidence: 60 };
+    } else {
+      return { category: 'Personal', accountCode: '883', confidence: 55 };
+    }
   }
 } 

@@ -1,4 +1,13 @@
-export const BANK_FORMATS = {
+export interface BankFormatConfig {
+  dateColumn: string;
+  descriptionColumn: string;
+  amountColumn: string;
+  dateFormat: string;
+  identifier: readonly string[];
+  patterns?: RegExp[];
+}
+
+export const BANK_FORMATS: Record<string, BankFormatConfig> = {
   Generic: {
     dateColumn: 'Date',
     descriptionColumn: 'Description',
@@ -14,11 +23,16 @@ export const BANK_FORMATS = {
     identifier: ['Date', 'Description', 'Amount']
   },
   RBC: {
-    dateColumn: 'Transaction Date',
+    dateColumn: 'Date',
     descriptionColumn: 'Description',
     amountColumn: 'Amount',
-    dateFormat: 'MM/DD/YYYY',
-    identifier: ['Transaction Date', 'Description', 'Amount']
+    dateFormat: 'DD MMM',
+    identifier: ['Date', 'Description', 'Withdrawals ($)', 'Deposits ($)', 'Balance ($)'],
+    patterns: [
+      /Royal Bank of Canada/i,
+      /RBC AdvantageBanking/i,
+      /Your RBC personal banking account statement/i
+    ]
   },
   TD: {
     dateColumn: 'Date',
@@ -77,6 +91,34 @@ export const BANK_FORMATS = {
       /PRE-AUTH\s*DEBIT/i,
       /Internet\s*Banking\s*E-TRANSFER/i,
       /GOVERNMENT\s*CANADA/i
+    ]
+  },
+  // Internet Banking Transfer format
+  InternetBanking: {
+    dateColumn: 'Date',
+    descriptionColumn: 'Description',
+    amountColumn: 'Amount',
+    dateFormat: 'YYYY-MM-DD',
+    identifier: ['Date', 'Description', 'Amount'],
+    patterns: [
+      /Internet\s*Banking/i,
+      /INTERNET\s*TRANSFER/i,
+      /Online\s*Banking/i,
+      /E-TRANSFER/i,
+      /Electronic\s*Transfer/i
+    ]
+  },
+  // Headerless CSV format (no headers, just data)
+  Headerless: {
+    dateColumn: 'Date',
+    descriptionColumn: 'Description',
+    amountColumn: 'Amount',
+    dateFormat: 'YYYY-MM-DD',
+    identifier: ['Date', 'Description', 'Amount'],
+    patterns: [
+      /^\d{4}-\d{2}-\d{2}/, // Starts with date
+      /Internet\s*Banking/i,
+      /TRANSFER/i
     ]
   }
 } as const;

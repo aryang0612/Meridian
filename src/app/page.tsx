@@ -10,12 +10,17 @@ import TransactionTable from '../components/TransactionTable';
 import ExportManager from '../components/ExportManager';
 import DuplicateWarning from '../components/DuplicateWarning';
 import NavigationBar from '../components/NavigationBar';
+import FileFormatError from '../components/FileFormatError';
+import CustomKeywordManager from '../components/CustomKeywordManager';
 import Image from 'next/image';
 import { PROVINCES } from '../data/provinces';
 import { useFinancialData } from '../context/FinancialDataContext';
+import { useAuth } from '../context/AuthContext';
+import { CommonIcons } from '../lib/iconSystem';
 
 export default function Dashboard() {
   const { financialData, setDashboardData } = useFinancialData();
+  const { user, loading } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [processingResults, setProcessingResults] = useState<{
     validation: ValidationResult;
@@ -25,51 +30,36 @@ export default function Dashboard() {
   const [duplicateResult, setDuplicateResult] = useState<DuplicateDetectionResult | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorFileName, setErrorFileName] = useState<string | undefined>(undefined);
   const [currentStep, setCurrentStep] = useState<'upload' | 'review' | 'export'>('upload');
   const [selectedProvince, setSelectedProvince] = useState('ON');
+  const [showKeywordManager, setShowKeywordManager] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   // AI Engine instance for feedback training (client-side only)
   const aiEngineRef = useRef<AIEngine | null>(null);
+  
+  // Initialize client-side rendering
   useEffect(() => {
-    if (typeof window !== 'undefined' && !aiEngineRef.current) {
-      aiEngineRef.current = new AIEngine('ON');
-    }
+    setIsClient(true);
   }, []);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      aiEngineRef.current = new AIEngine('ON', user?.id);
+      (window as any).aiEngine = aiEngineRef.current;
+    }
+  }, [user?.id]);
 
-  // Sync with global context for persistence (only on mount or when financialData changes externally)
+  // Simplified context sync - only restore on mount
   useEffect(() => {
     if (financialData?.dashboard && !transactions.length) {
-      const dashboard = financialData.dashboard;
-      setTransactions(dashboard.transactions);
-      if (dashboard.processingResults) {
-        setProcessingResults(dashboard.processingResults);
-      }
-      if (dashboard.currentStep) {
-        setCurrentStep(dashboard.currentStep);
-      }
-      if (dashboard.duplicateResult) {
-        setDuplicateResult(dashboard.duplicateResult);
-        setShowDuplicateWarning(dashboard.duplicateResult.duplicateCount > 0);
+      const { transactions: savedTrans, processingResults: savedResults } = financialData.dashboard;
+      if (savedTrans.length > 0) {
+        setTransactions(savedTrans);
+        if (savedResults) setProcessingResults(savedResults);
       }
     }
-  }, [financialData, transactions.length]);
-
-  // Save to global context whenever local state changes (debounced to prevent loops)
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (transactions.length > 0 || processingResults) {
-        setDashboardData({
-          transactions,
-          processingResults: processingResults || undefined,
-          currentStep,
-          duplicateResult: duplicateResult || undefined,
-          selectedProvince
-        });
-      }
-    }, 100); // Small delay to prevent rapid updates
-
-    return () => clearTimeout(timeoutId);
-  }, [transactions, processingResults, currentStep, duplicateResult, selectedProvince, setDashboardData]);
+  }, [financialData]);
 
   const handleFileProcessed = (data: {
     transactions: Transaction[];
@@ -92,20 +82,27 @@ export default function Dashboard() {
     }
     
     setError(null);
-    setCurrentStep('review');
+    setErrorFileName(undefined);
+    
+    // Stay on upload step - let user manually proceed
+    // setCurrentStep('review'); // REMOVED - no auto step transition
   };
 
-  const handleError = (errorMessage: string) => {
+  const handleError = (errorMessage: string, fileName?: string) => {
     setError(errorMessage);
+    setErrorFileName(fileName);
     setTransactions([]);
     setProcessingResults(null);
     setCurrentStep('upload');
   };
 
   const handleTransactionUpdate = (id: string, updates: Partial<Transaction>) => {
-    setTransactions(prev => prev.map(t => 
-      t.id === id ? { ...t, ...updates } : t
-    ));
+    setTransactions(prev => {
+      const newTransactions = prev.map(t => 
+        t.id === id ? { ...t, ...updates } : t
+      );
+      return newTransactions;
+    });
   };
 
   const handleResolveDuplicates = (cleanTransactions: Transaction[]) => {
@@ -129,6 +126,7 @@ export default function Dashboard() {
     setDuplicateResult(null);
     setShowDuplicateWarning(false);
     setError(null);
+    setErrorFileName(undefined);
     setCurrentStep('upload');
     
     // Clear from global context as well
@@ -138,12 +136,66 @@ export default function Dashboard() {
     });
   };
 
+  // Initialize client-side state
+  useEffect(() => {
+    if (isClient) {
+      setCurrentStep('upload');
+    }
+  }, [isClient]);
+
+  const handleDownloadTemplate = () => {
+    // Create and download a sample CSV template
+    const template = `Date,Description,Amount
+2024-01-15,Grocery Store Purchase,-125.50
+2024-01-16,Salary Deposit,2500.00
+2024-01-17,Gas Station,-45.75
+2024-01-18,Online Shopping,-89.99`;
+    
+    const blob = new Blob([template], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'meridian-template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleRetry = () => {
+    setError(null);
+    setErrorFileName(undefined);
+  };
+
+
+
+  // Redirect to login if not authenticated (only after component is mounted)
+  // Temporarily disabled for testing - uncomment when Supabase is properly configured
+  /*
+  if (!loading && !user) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-slate-900 mb-4">Authentication Required</div>
+          <div className="text-slate-600 mb-8">Please log in to access the dashboard.</div>
+          <a 
+            href="/login" 
+            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            Go to Login
+          </a>
+        </div>
+      </div>
+    );
+  }
+  */
+
   return (
     <div className="min-h-screen bg-white">
       {/* Professional Navigation Bar */}
       <NavigationBar 
         activeSection="dashboard" 
-        showNewFileButton={currentStep !== 'upload'}
+        showNewFileButton={isClient && currentStep !== 'upload'}
         onNewFile={handleNewFile}
       />
 
@@ -155,9 +207,9 @@ export default function Dashboard() {
             <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl shadow-slate-500/10 border border-slate-200/50">
               <div className="flex items-center space-x-12">
                 {[
-                  { id: 'upload', label: 'Upload', icon: '📤', desc: 'CSV file upload' },
-                  { id: 'review', label: 'Review & Code', icon: '📊', desc: 'Categorize & verify' },
-                  { id: 'export', label: 'Export', icon: '💾', desc: 'Download results' }
+                  { id: 'upload', label: 'Upload', icon: CommonIcons.stepUpload, desc: 'CSV file upload' },
+                  { id: 'review', label: 'Review & Code', icon: CommonIcons.stepReview, desc: 'Categorize & verify' },
+                  { id: 'export', label: 'Export', icon: CommonIcons.stepExport, desc: 'Download results' }
                 ].map((step, index) => (
                   <div key={step.id} className="flex items-center">
                     <div className={`flex items-center space-x-4 ${
@@ -165,16 +217,16 @@ export default function Dashboard() {
                       index < ['upload', 'review', 'export'].indexOf(currentStep) ? 'text-slate-600' : 
                       'text-slate-400'
                     }`}>
-                      <div className={`relative w-16 h-16 rounded-3xl flex items-center justify-center text-xl font-medium transition-all duration-500 ${
-                        currentStep === step.id ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white shadow-2xl shadow-purple-500/30 scale-110' : 
-                        index < ['upload', 'review', 'export'].indexOf(currentStep) ? 'bg-purple-50 text-purple-600 border-2 border-purple-200 shadow-lg' : 
-                        'bg-slate-50 text-slate-400 border-2 border-slate-200 shadow-md'
-                      }`}>
-                        {step.icon}
-                        {currentStep === step.id && (
-                          <div className="absolute -inset-2 bg-gradient-to-br from-purple-600 to-purple-700 rounded-3xl blur-lg opacity-20 animate-pulse"></div>
-                        )}
-                      </div>
+                                              <div className={`relative w-16 h-16 rounded-3xl flex items-center justify-center text-xl font-medium transition-all duration-500 ${
+                          currentStep === step.id ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white shadow-2xl shadow-purple-500/30 scale-110' : 
+                          index < ['upload', 'review', 'export'].indexOf(currentStep) ? 'bg-purple-50 text-purple-600 border-2 border-purple-200 shadow-lg' : 
+                          'bg-slate-50 text-slate-400 border-2 border-slate-200 shadow-md'
+                        }`}>
+                          <step.icon.icon className={step.icon.className} />
+                          {currentStep === step.id && (
+                            <div className="absolute -inset-2 bg-gradient-to-br from-purple-600 to-purple-700 rounded-3xl blur-lg opacity-20 animate-pulse"></div>
+                          )}
+                        </div>
                       <div className="hidden sm:block text-center">
                         <div className="font-bold text-base">{step.label}</div>
                         <div className="text-sm text-slate-500 mt-1">{step.desc}</div>
@@ -191,44 +243,69 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Modern CSV Format Guide */}
-          {currentStep === 'upload' && (
-            <div>
-              <div className="bg-white rounded-3xl p-10 border border-slate-200 shadow-xl shadow-slate-500/5">
+          {/* Error Display */}
+          {error && (
+            <FileFormatError
+              error={error}
+              fileName={errorFileName}
+              onRetry={handleRetry}
+              onDownloadTemplate={handleDownloadTemplate}
+            />
+          )}
+
+          {/* Upload Step */}
+          {currentStep === 'upload' && !error && (
+            <>
+              <div className="bg-white rounded-2xl p-12">
                 <div className="flex items-center space-x-4 mb-8">
-                  <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/25">
-                    <span className="text-white text-xl">📋</span>
+                  <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
+                    <span className="text-slate-600 font-semibold">1</span>
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-900 mb-1">Upload Your Bank Statement</h2>
-                    <p className="text-slate-600 text-base">CSV or PDF format, all Canadian banks supported</p>
-                  </div>
+                  <h2 className="text-2xl font-semibold text-slate-900">
+                    Upload Bank Statement
+                  </h2>
                 </div>
                 <FileUpload onFileProcessed={handleFileProcessed} onError={handleError} disabled={false} />
               </div>
-            </div>
-          )}
 
-          {/* Error Display */}
-          {error && (
-            <div className="bg-red-50 rounded-2xl p-8">
-              <div className="flex items-center space-x-3">
-                <div className="w-6 h-6 bg-red-100 rounded-lg flex items-center justify-center">
-                  <span className="text-red-600 text-sm">⚠</span>
+              {/* Show duplicate warning in upload step */}
+              {showDuplicateWarning && duplicateResult && (
+                <div className="bg-white rounded-2xl p-12">
+                  <DuplicateWarning
+                    duplicateResult={duplicateResult}
+                    onResolveDuplicates={handleResolveDuplicates}
+                    onDismiss={handleDismissDuplicateWarning}
+                  />
                 </div>
-                <span className="text-red-900 font-medium">Processing Error</span>
-              </div>
-              <p className="text-red-700 mt-3 leading-relaxed">{error}</p>
-              <button
-                onClick={() => {
-                  setError(null);
-                  setCurrentStep('upload');
-                }}
-                className="mt-4 text-sm text-red-600 hover:text-red-700 font-medium transition-colors"
-              >
-                Try uploading again
-              </button>
-            </div>
+              )}
+
+              {/* Show simple success message and next step button if we have processed data */}
+              {transactions.length > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-8">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                        <span className="text-green-600 text-xl">✓</span>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-green-900">
+                          File Processed Successfully
+                        </h3>
+                        <p className="text-green-700">
+                          {transactions.length} transactions ready for review
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setCurrentStep('review')}
+                      className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all duration-200 font-medium"
+                    >
+                      Review Transactions →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Step 2: Processing Results */}
@@ -246,14 +323,7 @@ export default function Dashboard() {
                 <ProcessingResults {...processingResults} transactions={transactions} />
               </div>
 
-              {/* Duplicate Warning */}
-              {showDuplicateWarning && duplicateResult && (
-                <DuplicateWarning
-                  duplicateResult={duplicateResult}
-                  onResolveDuplicates={handleResolveDuplicates}
-                  onDismiss={handleDismissDuplicateWarning}
-                />
-              )}
+
 
               {/* Transaction Review */}
               <div className="bg-white rounded-2xl p-12">
@@ -267,6 +337,12 @@ export default function Dashboard() {
                     </h2>
                   </div>
                   <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => setShowKeywordManager(true)}
+                      className="px-6 py-3 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 transition-all duration-200 font-medium border border-purple-200"
+                    >
+                      🎯 Custom Keywords
+                    </button>
                     <button
                       onClick={handleNewFile}
                       className="px-6 py-3 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-all duration-200 font-medium border border-red-200"
@@ -510,6 +586,17 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Custom Keyword Manager Modal */}
+      {showKeywordManager && (
+        <CustomKeywordManager
+          onClose={() => setShowKeywordManager(false)}
+          onKeywordsUpdated={() => {
+            // Optionally refresh transactions or show a notification
+            console.log('Custom keywords updated');
+          }}
+        />
+      )}
     </div>
   );
 } 

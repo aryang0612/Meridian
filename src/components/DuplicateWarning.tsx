@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, X, Eye, EyeOff } from 'lucide-react';
 import { DuplicateDetectionResult, DuplicateGroup } from '../lib/duplicateDetector';
 import { Transaction } from '../lib/types';
+import { formatCurrency } from '../lib/formatUtils';
 
 interface DuplicateWarningProps {
   duplicateResult: DuplicateDetectionResult;
@@ -35,13 +36,6 @@ const DuplicateWarning: React.FC<DuplicateWarningProps> = ({
 
   const handleRemoveDuplicates = () => {
     onResolveDuplicates(duplicateResult.cleanTransactions);
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-CA', {
-      style: 'currency',
-      currency: 'CAD'
-    }).format(amount);
   };
 
   return (
@@ -110,7 +104,11 @@ const DuplicateWarning: React.FC<DuplicateWarningProps> = ({
                       <div className="p-2 bg-green-50 border border-green-200 rounded text-xs">
                         <div className="font-medium text-green-800 mb-1">✓ Original (will be kept)</div>
                         <div className="text-gray-700">
-                          <div><strong>Date:</strong> {group.transaction.date}</div>
+                          <div><strong>Date:</strong> {new Date(group.transaction.date).toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric', 
+                            year: 'numeric' 
+                          })}</div>
                           <div><strong>Amount:</strong> {formatCurrency(group.transaction.amount)}</div>
                           <div><strong>Description:</strong> {group.transaction.description}</div>
                         </div>

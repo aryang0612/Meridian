@@ -57,7 +57,7 @@ export const testAIEngine = async () => {
   const { AIEngine } = await import('./aiEngine');
   const aiEngine = new AIEngine();
   
-  console.log('🧪 Testing AI Engine with sample transactions...\n');
+  // Testing AI Engine with sample transactions
   
   const results = await aiEngine.categorizeBatch(SAMPLE_TRANSACTIONS);
   

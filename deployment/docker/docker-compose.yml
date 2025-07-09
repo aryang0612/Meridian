@@ -1,0 +1,342 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # APPLICATION SERVICES
+  # ============================================================================
+  
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: meridian-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - app-network
+    volumes:
+      - app-logs:/app/logs
+      - app-uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================================================
+  # DATABASE SERVICES
+  # ============================================================================
+  
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: meridian-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-meridian}
+      - POSTGRES_USER=${POSTGRES_USER:-meridian}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./sql/saas-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./sql/seed-data.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-meridian}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache & Sessions
+  redis:
+    image: redis:7-alpine
+    container_name: meridian-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================================
+  # MONITORING & OBSERVABILITY
+  # ============================================================================
+  
+  # Prometheus Metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: meridian-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - monitoring-network
+      - app-network
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: meridian-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - monitoring-network
+    depends_on:
+      - prometheus
+
+  # Node Exporter for System Metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: meridian-node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitoring-network
+
+  # ============================================================================
+  # REVERSE PROXY & LOAD BALANCER
+  # ============================================================================
+  
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: meridian-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - app
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # SECURITY & BACKUP
+  # ============================================================================
+  
+  # Database Backup Service
+  backup:
+    image: postgres:15-alpine
+    container_name: meridian-backup
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-meridian}
+      - POSTGRES_USER=${POSTGRES_USER:-meridian}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-0 2 * * *}
+      - BACKUP_RETENTION=${BACKUP_RETENTION:-7}
+    volumes:
+      - postgres-backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    command: sh -c "chmod +x /backup.sh && crond -f"
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+
+  # Fail2Ban Security
+  fail2ban:
+    image: crazymax/fail2ban:latest
+    container_name: meridian-fail2ban
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-UTC}
+      - F2B_LOG_LEVEL=INFO
+      - F2B_LOG_TARGET=/data/fail2ban.log
+    volumes:
+      - fail2ban-data:/data
+      - nginx-logs:/var/log/nginx:ro
+      - app-logs:/var/log/app:ro
+      - ./fail2ban/jail.local:/etc/fail2ban/jail.local:ro
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    network_mode: host
+    depends_on:
+      - nginx
+
+  # ============================================================================
+  # DEVELOPMENT & TESTING (Optional)
+  # ============================================================================
+  
+  # Mailhog for Email Testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: meridian-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - app-network
+    profiles:
+      - development
+
+  # Adminer Database Management
+  adminer:
+    image: adminer:latest
+    container_name: meridian-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+    networks:
+      - app-network
+    profiles:
+      - development
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  monitoring-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+# ============================================================================
+# VOLUMES
+# ============================================================================
+
+volumes:
+  # Application Data
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  app-logs:
+    driver: local
+  app-uploads:
+    driver: local
+  
+  # Monitoring Data
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  
+  # Proxy & Security
+  nginx-logs:
+    driver: local
+  fail2ban-data:
+    driver: local
+  
+  # Backups
+  postgres-backups:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${BACKUP_PATH:-./backups}
+
+# ============================================================================
+# ENVIRONMENT CONFIGURATION
+# ============================================================================
+
+# Create a .env file with these variables:
+# 
+# # Database
+# POSTGRES_DB=meridian
+# POSTGRES_USER=meridian
+# POSTGRES_PASSWORD=your_secure_password
+# DATABASE_URL=postgresql://meridian:your_secure_password@postgres:5432/meridian
+# 
+# # Redis
+# REDIS_PASSWORD=your_redis_password
+# 
+# # Supabase
+# NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+# SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# 
+# # OpenAI
+# OPENAI_API_KEY=your_openai_key
+# 
+# # Stripe
+# STRIPE_SECRET_KEY=your_stripe_secret
+# STRIPE_WEBHOOK_SECRET=your_webhook_secret
+# 
+# # Monitoring
+# GRAFANA_USER=admin
+# GRAFANA_PASSWORD=your_grafana_password
+# 
+# # Backup
+# BACKUP_SCHEDULE=0 2 * * *
+# BACKUP_RETENTION=7
+# BACKUP_PATH=./backups
+# 
+# # Security
+# TZ=UTC 

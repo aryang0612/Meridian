@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import NavigationBar from '../../components/NavigationBar';
 import { ReportGenerator, FinancialData, ProfitLossData, BalanceSheetData } from '../../lib/reportGenerator';
+import { ChartOfAccounts } from '../../lib/chartOfAccounts';
 import { useFinancialData } from '../../context/FinancialDataContext';
 
 // Sample transaction data - in a real app, this would come from your database
@@ -13,28 +14,28 @@ const generateSampleData = (): FinancialData => {
 
   return {
     transactions: [
-      // Revenue transactions
-      { id: '1', date: new Date('2024-01-15'), description: 'Service Revenue', amount: 5000, category: 'Consulting Services', accountCode: '4100', type: 'income' },
-      { id: '2', date: new Date('2024-02-20'), description: 'Product Sales', amount: 8500, category: 'Product Sales', accountCode: '4200', type: 'income' },
-      { id: '3', date: new Date('2024-03-10'), description: 'Subscription Revenue', amount: 3200, category: 'Recurring Revenue', accountCode: '4300', type: 'income' },
+      // Revenue transactions - using correct CSV account codes (as strings)
+      { id: '1', date: new Date('2024-01-15'), description: 'Service Revenue', amount: 5000, category: 'Service Revenue', accountCode: '220', type: 'income' },
+      { id: '2', date: new Date('2024-02-20'), description: 'Product Sales', amount: 8500, category: 'Sales Revenue', accountCode: '200', type: 'income' },
+      { id: '3', date: new Date('2024-03-10'), description: 'Interest Income', amount: 3200, category: 'Interest Income', accountCode: '270', type: 'income' },
       
-      // Expense transactions
-      { id: '4', date: new Date('2024-01-05'), description: 'Office Rent', amount: -1200, category: 'Rent Expense', accountCode: '6100', type: 'expense' },
-      { id: '5', date: new Date('2024-01-10'), description: 'Internet & Phone', amount: -150, category: 'Utilities', accountCode: '6200', type: 'expense' },
-      { id: '6', date: new Date('2024-02-01'), description: 'Marketing Campaign', amount: -800, category: 'Marketing', accountCode: '6300', type: 'expense' },
-      { id: '7', date: new Date('2024-02-15'), description: 'Office Supplies', amount: -250, category: 'Office Expenses', accountCode: '6400', type: 'expense' },
+      // Expense transactions - using correct CSV account codes (as strings)
+      { id: '4', date: new Date('2024-01-05'), description: 'Office Rent', amount: -1200, category: 'Rent', accountCode: '469', type: 'expense' },
+      { id: '5', date: new Date('2024-01-10'), description: 'Internet & Phone', amount: -150, category: 'Telephone & Internet', accountCode: '489', type: 'expense' },
+      { id: '6', date: new Date('2024-02-01'), description: 'Marketing Campaign', amount: -800, category: 'Advertising', accountCode: '400', type: 'expense' },
+      { id: '7', date: new Date('2024-02-15'), description: 'Office Supplies', amount: -250, category: 'Supplies and Small Tools', accountCode: '455', type: 'expense' },
       
-      // Asset transactions
-      { id: '8', date: new Date('2024-01-01'), description: 'Cash in Bank', amount: 15000, category: 'Cash', accountCode: '1100', type: 'asset' },
-      { id: '9', date: new Date('2024-01-20'), description: 'Accounts Receivable', amount: 4500, category: 'A/R', accountCode: '1200', type: 'asset' },
-      { id: '10', date: new Date('2024-02-01'), description: 'Office Equipment', amount: 5000, category: 'Equipment', accountCode: '1500', type: 'asset' },
+      // Asset transactions - using correct CSV account codes (as strings)
+      { id: '8', date: new Date('2024-01-01'), description: 'Cash in Bank', amount: 15000, category: 'Cash', accountCode: '610', type: 'asset' },
+      { id: '9', date: new Date('2024-01-20'), description: 'Accounts Receivable', amount: 4500, category: 'Accounts Receivable', accountCode: '610', type: 'asset' },
+      { id: '10', date: new Date('2024-02-01'), description: 'Office Equipment', amount: 5000, category: 'Equipment', accountCode: '710', type: 'asset' },
       
-      // Liability transactions
-      { id: '11', date: new Date('2024-01-01'), description: 'Accounts Payable', amount: -2500, category: 'A/P', accountCode: '2100', type: 'liability' },
-      { id: '12', date: new Date('2024-01-15'), description: 'Business Loan', amount: -10000, category: 'Long-term Debt', accountCode: '2500', type: 'liability' },
+      // Liability transactions - using correct CSV account codes (as strings)
+      { id: '11', date: new Date('2024-01-01'), description: 'Accounts Payable', amount: -2500, category: 'Accounts Payable', accountCode: '800', type: 'liability' },
+      { id: '12', date: new Date('2024-01-15'), description: 'Sales Tax Payable', amount: -1000, category: 'Sales Tax', accountCode: '820', type: 'liability' },
       
-      // Equity transactions
-      { id: '13', date: new Date('2024-01-01'), description: 'Owner Investment', amount: 25000, category: 'Owner Equity', accountCode: '3100', type: 'equity' },
+      // Equity transactions - using correct CSV account codes (as strings)
+      { id: '13', date: new Date('2024-01-01'), description: 'Owner Investment', amount: 25000, category: 'Owner A Share Capital', accountCode: '970', type: 'equity' },
     ],
     startDate,
     endDate,
@@ -78,22 +79,59 @@ const convertDashboardToFinancialData = (contextData: any): FinancialData | null
 export default function ReportsPage() {
   const { financialData: contextData, isSample, setIsSample } = useFinancialData();
   const [reportGenerator, setReportGenerator] = useState<ReportGenerator | null>(null);
-  
-  // Initialize ReportGenerator on client-side only
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !reportGenerator) {
-      setReportGenerator(new ReportGenerator());
-    }
-  }, [reportGenerator]);
   const [financialData, setFinancialData] = useState<FinancialData | null>(null);
   const [profitLossData, setProfitLossData] = useState<ProfitLossData | null>(null);
   const [balanceSheetData, setBalanceSheetData] = useState<BalanceSheetData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('ytd'); // ytd, q4, q3, q2, q1, custom
+  const [isReportGeneratorReady, setIsReportGeneratorReady] = useState(false);
 
+  // Initialize ReportGenerator on client-side only
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !reportGenerator) {
+      const initReportGenerator = async () => {
+        try {
+          console.log('🔄 Initializing ReportGenerator...');
+          
+          // Create ChartOfAccounts instance first
+          const chartOfAccounts = new ChartOfAccounts();
+          
+          // Initialize with default province (ON)
+          await chartOfAccounts.setProvince('ON');
+          
+          // Wait for Chart of Accounts to initialize
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Create ReportGenerator with ChartOfAccounts
+          const generator = new ReportGenerator(chartOfAccounts);
+          
+          setReportGenerator(generator);
+          setIsReportGeneratorReady(true);
+          console.log('✅ ReportGenerator initialized successfully');
+        } catch (error) {
+          console.error('❌ Failed to initialize ReportGenerator:', error);
+          // Create a fallback generator even if Chart of Accounts fails
+          try {
+            const fallbackChartOfAccounts = new ChartOfAccounts();
+            const fallbackGenerator = new ReportGenerator(fallbackChartOfAccounts);
+            setReportGenerator(fallbackGenerator);
+            setIsReportGeneratorReady(true);
+            console.log('✅ Fallback ReportGenerator initialized');
+          } catch (fallbackError) {
+            console.error('❌ Fallback ReportGenerator also failed:', fallbackError);
+            setIsReportGeneratorReady(true); // Still set to true to avoid blocking
+          }
+        }
+      };
+      initReportGenerator();
+    }
+  }, [reportGenerator]);
+
+  // Handle data processing and report generation
   useEffect(() => {
     console.log('📊 Reports page useEffect triggered');
     console.log('📊 Context data:', contextData);
+    console.log('📊 ReportGenerator ready:', isReportGeneratorReady);
     
     let data: FinancialData;
     
@@ -103,7 +141,6 @@ export default function ReportsPage() {
       data = uploadedData;
       setIsSample(false);
       console.log('📊 Using uploaded transaction data for reports:', data.transactions.length, 'transactions');
-      console.log('📊 Sample transactions:', data.transactions.slice(0, 3));
     } else {
       data = generateSampleData();
       setIsSample(true);
@@ -112,8 +149,8 @@ export default function ReportsPage() {
     
     setFinancialData(data);
     
-    // Generate report data
-    if (reportGenerator) {
+    // Generate report data only when ReportGenerator is ready
+    if (isReportGeneratorReady && reportGenerator) {
       try {
         console.log('📊 Generating reports with data:', data);
         const plData = reportGenerator.generateProfitLossData(data);
@@ -124,9 +161,74 @@ export default function ReportsPage() {
         console.log('📊 P&L Data:', plData);
       } catch (error) {
         console.error('❌ Error generating reports:', error);
+        // Fallback: generate basic report data manually
+        console.log('🔄 Attempting fallback report generation...');
+        try {
+          const fallbackPlData = generateFallbackProfitLossData(data);
+          const fallbackBsData = generateFallbackBalanceSheetData(data);
+          setProfitLossData(fallbackPlData);
+          setBalanceSheetData(fallbackBsData);
+          console.log('✅ Fallback reports generated successfully');
+        } catch (fallbackError) {
+          console.error('❌ Fallback report generation also failed:', fallbackError);
+        }
       }
     }
-  }, [contextData, reportGenerator, setIsSample]);
+  }, [contextData, isReportGeneratorReady, reportGenerator, setIsSample]);
+
+  // Fallback functions for when ReportGenerator fails
+  const generateFallbackProfitLossData = (data: FinancialData): ProfitLossData => {
+    const revenue = data.transactions.filter(t => t.amount > 0);
+    const expenses = data.transactions.filter(t => t.amount < 0);
+    
+    const revenueTotal = revenue.reduce((sum, t) => sum + t.amount, 0);
+    const expensesTotal = Math.abs(expenses.reduce((sum, t) => sum + t.amount, 0));
+    
+    return {
+      revenue: {
+        total: revenueTotal,
+        categories: revenue.map(t => ({ name: t.category, amount: t.amount, accountCode: t.accountCode }))
+      },
+      expenses: {
+        total: expensesTotal,
+        categories: expenses.map(t => ({ name: t.category, amount: Math.abs(t.amount), accountCode: t.accountCode }))
+      },
+      netIncome: revenueTotal - expensesTotal,
+      grossProfit: revenueTotal,
+      operatingIncome: revenueTotal - expensesTotal
+    };
+  };
+
+  const generateFallbackBalanceSheetData = (data: FinancialData): BalanceSheetData => {
+    const assets = data.transactions.filter(t => t.type === 'asset');
+    const liabilities = data.transactions.filter(t => t.type === 'liability');
+    const equity = data.transactions.filter(t => t.type === 'equity');
+    
+    const assetsTotal = assets.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const liabilitiesTotal = liabilities.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const equityTotal = equity.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    
+    return {
+      assets: {
+        current: assets.filter(t => t.accountCode.match(/^6[1-9]\d$/)).map(t => ({ name: t.category, amount: Math.abs(t.amount), accountCode: t.accountCode })),
+        nonCurrent: assets.filter(t => t.accountCode.match(/^7\d{2}$/)).map(t => ({ name: t.category, amount: Math.abs(t.amount), accountCode: t.accountCode })),
+        totalCurrent: assets.filter(t => t.accountCode.match(/^6[1-9]\d$/)).reduce((sum, t) => sum + Math.abs(t.amount), 0),
+        totalNonCurrent: assets.filter(t => t.accountCode.match(/^7\d{2}$/)).reduce((sum, t) => sum + Math.abs(t.amount), 0),
+        total: assetsTotal
+      },
+      liabilities: {
+        current: liabilities.filter(t => t.accountCode.match(/^8\d{2}$/)).map(t => ({ name: t.category, amount: Math.abs(t.amount), accountCode: t.accountCode })),
+        nonCurrent: liabilities.filter(t => t.accountCode.match(/^9\d{2}$/)).map(t => ({ name: t.category, amount: Math.abs(t.amount), accountCode: t.accountCode })),
+        totalCurrent: liabilities.filter(t => t.accountCode.match(/^8\d{2}$/)).reduce((sum, t) => sum + Math.abs(t.amount), 0),
+        totalNonCurrent: liabilities.filter(t => t.accountCode.match(/^9\d{2}$/)).reduce((sum, t) => sum + Math.abs(t.amount), 0),
+        total: liabilitiesTotal
+      },
+      equity: {
+        items: equity.map(t => ({ name: t.category, amount: Math.abs(t.amount), accountCode: t.accountCode })),
+        total: equityTotal
+      }
+    };
+  };
 
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('en-CA', {
@@ -174,8 +276,10 @@ export default function ReportsPage() {
     }
   };
 
-  // Add a flag to determine if a real file is selected (not just sample data)
-  const isFileSelected = !isSample && financialData && financialData.transactions && financialData.transactions.length > 0;
+  // Show reports if we have data (either sample or real) and reports are generated
+  const hasReportData = financialData && financialData.transactions && financialData.transactions.length > 0;
+  const canShowReports = hasReportData && profitLossData && balanceSheetData;
+  const isRealData = !isSample && hasReportData;
 
   return (
     <div className="min-h-screen">
@@ -187,6 +291,42 @@ export default function ReportsPage() {
           {isSample && (
             <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 rounded">
               <strong>Sample Data:</strong> No real file uploaded. Reports below are for demonstration only.
+            </div>
+          )}
+          
+          {/* Debug banner for development */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800 rounded">
+              <div className="flex items-center justify-between">
+                <div>
+                  <strong>Debug Info:</strong> 
+                  <span className="ml-2">ReportGenerator Ready: {isReportGeneratorReady ? '✅' : '⏳'}</span>
+                  <span className="ml-2">Has Data: {hasReportData ? '✅' : '❌'}</span>
+                  <span className="ml-2">Can Show Reports: {canShowReports ? '✅' : '❌'}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    // Forcing sample data generation
+                    const sampleData = generateSampleData();
+                    setFinancialData(sampleData);
+                    setIsSample(true);
+                    if (reportGenerator) {
+                      try {
+                        const plData = reportGenerator.generateProfitLossData(sampleData);
+                        const bsData = reportGenerator.generateBalanceSheetData(sampleData);
+                        setProfitLossData(plData);
+                        setBalanceSheetData(bsData);
+                        // Sample reports generated
+                      } catch (error) {
+                        console.error('❌ Debug: Failed to generate sample reports:', error);
+                      }
+                    }
+                  }}
+                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                >
+                  Force Sample Data
+                </button>
+              </div>
             </div>
           )}
           {/* Page Header */}
@@ -241,7 +381,7 @@ export default function ReportsPage() {
                       <p className="text-slate-600 text-sm">{getPeriodLabel()}</p>
                     </div>
                   </div>
-                  {isFileSelected && (
+                  {isRealData && (
                     <button
                       onClick={() => handleGeneratePDF('profit-loss')}
                       disabled={isGenerating || !profitLossData}
@@ -256,7 +396,7 @@ export default function ReportsPage() {
                 </div>
               </div>
               
-              {isFileSelected ? (
+              {canShowReports ? (
                 profitLossData && (
                   <div className="p-8">
                     <div className="space-y-6">
@@ -325,6 +465,14 @@ export default function ReportsPage() {
                     </div>
                   </div>
                 )
+              ) : hasReportData ? (
+                <div className="p-8 text-center text-slate-500 text-lg">
+                  <div className="flex items-center justify-center space-x-2 mb-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+                    <span>Generating reports...</span>
+                  </div>
+                  <p className="text-sm">Please wait while we process your financial data.</p>
+                </div>
               ) : (
                 <div className="p-8 text-center text-slate-500 text-lg">
                   Please select or upload a file to view the Profit & Loss report.
@@ -349,7 +497,7 @@ export default function ReportsPage() {
                   </div>
                 </div>
               </div>
-              {isFileSelected ? (
+              {canShowReports ? (
                 balanceSheetData && (
                   <div className="p-8">
                     <div className="space-y-6">
@@ -436,6 +584,14 @@ export default function ReportsPage() {
                     </div>
                   </div>
                 )
+              ) : hasReportData ? (
+                <div className="p-8 text-center text-slate-500 text-lg">
+                  <div className="flex items-center justify-center space-x-2 mb-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+                    <span>Generating reports...</span>
+                  </div>
+                  <p className="text-sm">Please wait while we process your financial data.</p>
+                </div>
               ) : (
                 <div className="p-8 text-center text-slate-500 text-lg">
                   Please select or upload a file to view the Balance Sheet report.

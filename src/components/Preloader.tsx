@@ -1,4 +1,12 @@
+'use client';
+
 import React, { useEffect, useRef, useState } from 'react';
+
+// Stable random generator to prevent hydration mismatches
+const stableRandom = (seed: number) => {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+};
 
 const Preloader: React.FC<{ onFinish?: () => void }> = ({ onFinish }) => {
   const [show, setShow] = useState(true);
@@ -42,20 +50,25 @@ const Preloader: React.FC<{ onFinish?: () => void }> = ({ onFinish }) => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // Initialize data streams
+  // Initialize data streams with stable random values
   useEffect(() => {
     const generateStreams = () => {
-      const streams = Array.from({ length: 8 }, (_, i) => ({
-        id: i,
-        code: accountingCodes[Math.floor(Math.random() * accountingCodes.length)],
-        x: Math.random() * 30, // Left 30% of screen
-        y: Math.random() * 100 + 100, // Random starting height
-        size: 0.2 + Math.random() * 0.2, // 0.2rem to 0.4rem (extremely small)
-        rotation: (Math.random() - 0.5) * 10, // -5deg to +5deg
-        speed: 0.5 + Math.random() * 1, // Varying speeds
-        opacity: 0.1 + Math.random() * 0.1, // 0.1 to 0.2
-        delay: Math.random() * 5 // Random delays
-      }));
+      const streams = Array.from({ length: 8 }, (_, i) => {
+        // Use a stable seed based on component mount time, not current timestamp
+        const baseSeed = 12345; // Stable base seed
+        const seed = baseSeed + i; // Use stable base + index for consistent results
+        return {
+          id: i,
+          code: accountingCodes[Math.floor(stableRandom(seed) * accountingCodes.length)],
+          x: stableRandom(seed + 1) * 30, // Left 30% of screen
+          y: stableRandom(seed + 2) * 100 + 100, // Random starting height
+          size: 0.2 + stableRandom(seed + 3) * 0.2, // 0.2rem to 0.4rem (extremely small)
+          rotation: (stableRandom(seed + 4) - 0.5) * 10, // -5deg to +5deg
+          speed: 0.5 + stableRandom(seed + 5) * 1, // Varying speeds
+          opacity: 0.1 + stableRandom(seed + 6) * 0.1, // 0.1 to 0.2
+          delay: stableRandom(seed + 7) * 5 // Random delays
+        };
+      });
       setDataStreams(streams);
     };
 
@@ -101,8 +114,8 @@ const Preloader: React.FC<{ onFinish?: () => void }> = ({ onFinish }) => {
   const handleLaunch = () => {
     setShow(false);
     if (onFinish) onFinish();
-    // eslint-disable-next-line no-console
-    console.log('🚀 Launching the greatest app ever created...');
+     
+    // Launching application
   };
 
   if (!show) return null;

@@ -200,8 +200,7 @@ export class PDFProcessor {
         '09/01/2023,DOMINION PREM MSP,-316.90'
       ];
       
-      console.log('Testing parsing with known data...');
-      console.log('Test lines:', testLines);
+      // Testing parsing with known data
       
       const transactions = this.parseBankStatementText(testLines);
       console.log('Parsed transactions:', transactions);
@@ -212,6 +211,19 @@ export class PDFProcessor {
   private parseBankStatementText(lines: string[]): Array<{ date: string; description: string; amount: string }> {
     const transactions: Array<{ date: string; description: string; amount: string }> = [];
     
+    // Debug: Log first few lines to understand format
+    if (typeof window !== 'undefined') {
+      console.log('First 10 lines for parsing:');
+      lines.slice(0, 10).forEach((line, index) => {
+        console.log(`${index + 1}: "${line}"`);
+      });
+    }
+    
+    // RBC-specific date patterns
+    const rbcDatePatterns = [
+      /(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/i, // 11 Dec, 15 Jan, etc.
+    ];
+    
     // More flexible date patterns - including month abbreviations
     const datePatterns = [
       /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/, // DD/MM/YYYY or MM/DD/YYYY
@@ -219,6 +231,16 @@ export class PDFProcessor {
       /(\d{1,2})-(\d{1,2})-(\d{2,4})/, // DD-MM-YYYY
       /(\d{1,2})\/(\d{1,2})\/(\d{2})/, // DD/MM/YY or MM/DD/YY
       /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{1,2})/, // MAY02, JAN15, etc.
+    ];
+    
+    // RBC-specific amount patterns for separate withdrawal/deposit columns
+    const rbcAmountPatterns = [
+      /([-+]?[\d,]+\.?\d*)\s*,\s*$/, // Withdrawal amount at end (e.g., "12.00,")
+      /,\s*([-+]?[\d,]+\.?\d*)\s*$/, // Deposit amount at end (e.g., ",600.00")
+      /,\s*([-+]?[\d,]+\.?\d*)\s*,/, // Deposit amount in middle (e.g., ",600.00,")
+      /([-+]?[\d,]+\.?\d*)\s*,\s*[-+]?[\d,]*\.?\d*\s*$/, // Withdrawal followed by balance
+      /,\s*([-+]?[\d,]+\.?\d*)\s*,\s*[-+]?[\d,]*\.?\d*\s*$/, // Deposit followed by balance
+      /([-+]?[\d,]+\.?\d*)\s*$/, // Any amount at end
     ];
     
     // More flexible amount patterns
@@ -239,20 +261,36 @@ export class PDFProcessor {
       /\b[A-Za-z]{3,9}\s+\d{1,2},\s+\d{4}\b/
     ];
     
+    let processedCount = 0;
+    
     for (const line of lines) {
       // Skip header lines, balance lines, and summary lines
       if (this.isHeaderOrSummaryLine(line)) {
         continue;
       }
       
-      // Look for date pattern
+      // First try RBC-specific date pattern
       let dateMatch = null;
       let datePattern = null;
-      for (const pattern of datePatterns) {
+      let isRbcFormat = false;
+      
+      for (const pattern of rbcDatePatterns) {
         dateMatch = line.match(pattern);
         if (dateMatch) {
           datePattern = pattern;
+          isRbcFormat = true;
           break;
+        }
+      }
+      
+      if (!dateMatch) {
+        // Try regular date patterns
+        for (const pattern of datePatterns) {
+          dateMatch = line.match(pattern);
+          if (dateMatch) {
+            datePattern = pattern;
+            break;
+          }
         }
       }
       
@@ -271,7 +309,19 @@ export class PDFProcessor {
       
       // Extract date and handle month abbreviations
       let date = dateMatch[0];
-      if (datePattern && datePattern.toString().includes('JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC')) {
+      if (isRbcFormat) {
+        // Handle RBC format: "11 Dec" -> "11/12/2024" (assuming current year)
+        const day = dateMatch[1];
+        const month = dateMatch[2].toUpperCase();
+        const monthMap: { [key: string]: string } = {
+          'JAN': '01', 'FEB': '02', 'MAR': '03', 'APR': '04',
+          'MAY': '05', 'JUN': '06', 'JUL': '07', 'AUG': '08',
+          'SEP': '09', 'OCT': '10', 'NOV': '11', 'DEC': '12'
+        };
+        const monthNum = monthMap[month] || '01';
+        const currentYear = new Date().getFullYear();
+        date = `${day}/${monthNum}/${currentYear}`;
+      } else if (datePattern && datePattern.toString().includes('JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC')) {
         const monthMap: { [key: string]: string } = {
           'JAN': '01', 'FEB': '02', 'MAR': '03', 'APR': '04',
           'MAY': '05', 'JUN': '06', 'JUL': '07', 'AUG': '08',
@@ -283,11 +333,21 @@ export class PDFProcessor {
         date = `${day}/${monthNum}/2022`; // Assuming 2022 based on your data
       }
       
-      // Look for amount - try multiple patterns
+      // Look for amount - try RBC patterns first if it's RBC format
       let amountMatch = null;
-      for (const pattern of amountPatterns) {
-        amountMatch = line.match(pattern);
-        if (amountMatch) break;
+      if (isRbcFormat) {
+        for (const pattern of rbcAmountPatterns) {
+          amountMatch = line.match(pattern);
+          if (amountMatch) break;
+        }
+      }
+      
+      if (!amountMatch) {
+        // Try regular amount patterns
+        for (const pattern of amountPatterns) {
+          amountMatch = line.match(pattern);
+          if (amountMatch) break;
+        }
       }
       
       if (!amountMatch) continue;
@@ -301,8 +361,15 @@ export class PDFProcessor {
       description = description.replace(dateMatch[0], '').trim();
       
       // Remove the amount from the line - be more careful to avoid partial matches
-      const amountRegex = new RegExp(`\\b${amount.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
-      description = description.replace(amountRegex, '').trim();
+      try {
+        const escapedAmount = amount.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const amountRegex = new RegExp(`\\b${escapedAmount}\\b`);
+        description = description.replace(amountRegex, '').trim();
+      } catch (regexError) {
+        console.warn('Regex error with amount:', amount, regexError);
+        // Fallback: simple string replacement
+        description = description.replace(amount, '').trim();
+      }
       
       // Clean up description more thoroughly
       description = description.replace(/^\s*[-.,|]\s*/, ''); // Remove leading punctuation
@@ -317,7 +384,24 @@ export class PDFProcessor {
           description,
           amount
         });
+        
+        // Debug: Log successful transaction parsing
+        if (typeof window !== 'undefined' && processedCount < 5) {
+          console.log(`Parsed transaction ${processedCount + 1}:`, {
+            originalLine: line,
+            date: this.normalizeDate(date),
+            description,
+            amount,
+            isRbcFormat
+          });
+        }
+        processedCount++;
       }
+    }
+    
+    // Debug: Log summary
+    if (typeof window !== 'undefined') {
+      console.log(`Parsing complete. Found ${transactions.length} transactions from ${processedCount} processed lines.`);
     }
     
     return transactions;
@@ -330,19 +414,24 @@ export class PDFProcessor {
     const skipKeywords = [
       'statement period', 'account number', 'date description amount',
       'balance forward', 'page', 'summary', 'total', 'bank branch',
-      'customer service', 'service charge'
+      'customer service', 'service charge', 'opening balance'
     ];
     
     // Only skip if the line contains multiple header keywords or is clearly a header
     const keywordCount = skipKeywords.filter(keyword => lowerLine.includes(keyword)).length;
     
-    // Also skip lines that are too short (likely headers)
-    if (line.trim().length < 10) {
+    // Also skip lines that are too short (likely headers) - but be more lenient for RBC format
+    if (line.trim().length < 5) {
       return true;
     }
     
     // Skip lines that are all uppercase and contain typical header words
     if (line === line.toUpperCase() && (lowerLine.includes('date') || lowerLine.includes('amount'))) {
+      return true;
+    }
+    
+    // Skip lines that are just "Opening Balance" or similar
+    if (lowerLine.trim() === 'opening balance') {
       return true;
     }
     
