@@ -35,14 +35,8 @@ const nextConfig: NextConfig = {
         ignored: ['**/node_modules/**', '**/.git/**', '**/docs/**', '**/testing/**'],
       };
       
-      // Fix webpack cache issues - simplified configuration
-      config.cache = {
-        type: 'filesystem',
-        cacheDirectory: require('path').join(__dirname, '.next/cache/webpack'),
-        compression: 'gzip',
-        store: 'pack',
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-      };
+      // Disable problematic filesystem cache in development
+      config.cache = false;
     }
     
     // Optimize bundle size
