@@ -7,9 +7,16 @@ export default function StorageIndicator() {
   const { financialData } = useFinancialData();
   const [showSaved, setShowSaved] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Client-side mounting
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
-    if (financialData) {
+    if (!mounted || !financialData) return; // Only run after client-side mount
+    
       // Show "Saved" indicator briefly
       setShowSaved(true);
       setLastSaved(new Date().toLocaleTimeString());
@@ -20,11 +27,10 @@ export default function StorageIndicator() {
       }, 2000);
 
       return () => clearTimeout(timer);
-    }
-  }, [financialData]);
+  }, [financialData, mounted]);
 
-  // Don't show anything if no data
-  if (!financialData) {
+  // Don't show anything if not mounted or no data
+  if (!mounted || !financialData) {
     return null;
   }
 

@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { Transaction } from '../lib/types';
 import { aiCategorizationService, AICategorizationResult } from '../lib/aiCategorizationService';
-import { CustomKeywordManager } from '../data/customKeywords';
 
 interface Props {
   transaction: Transaction;
@@ -26,17 +25,42 @@ export default function AICategorizationButton({
   const [showKeywordPrompt, setShowKeywordPrompt] = useState(false);
   const [result, setResult] = useState<AICategorizationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [keywordManager] = useState(() => CustomKeywordManager.getInstance());
 
   useEffect(() => {
     // Initialize the AI service
-    aiCategorizationService.initialize().then(() => {
-      setIsAvailable(aiCategorizationService.isAvailable());
-    });
+    const checkAndInitializeService = async () => {
+      try {
+        // Ensure the service exists and has the methods we need
+        if (!aiCategorizationService || typeof aiCategorizationService.isAvailable !== 'function') {
+          console.warn('AI categorization service not available yet');
+          return;
+        }
+
+        // Initialize the service if not already initialized
+        if (!aiCategorizationService.isAvailable()) {
+          await aiCategorizationService.initialize();
+        }
+        
+        setIsAvailable(aiCategorizationService.isAvailable());
+      } catch (error) {
+        console.error('Failed to initialize AI categorization service:', error);
+        setIsAvailable(false);
+      }
+    };
+
+    checkAndInitializeService();
   }, []);
 
-  const handleAICategorize = async () => {
+  const performAICategorization = async (retryCount = 0) => {
     if (disabled || isLoading || !isAvailable) return;
+
+    // Double-check the service is ready
+    if (!aiCategorizationService || typeof aiCategorizationService.forceAICategorization !== 'function') {
+      console.error('AI categorization service not available');
+      setError('AI categorization service not available');
+      setShowResult(true);
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -45,28 +69,87 @@ export default function AICategorizationButton({
     setShowKeywordPrompt(false);
 
     try {
-      const aiResult = await aiCategorizationService.forceAICategorization({
-        transaction,
-        province
+      console.log('🤖 AI button clicked - calling ChatGPT directly...');
+      
+      // Call ChatGPT API directly with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      const response = await fetch('/api/ai-categorize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transaction,
+          province,
+          forceAI: true,
+          clearCache: true // Always get fresh results
+        }),
+        signal: controller.signal
       });
 
-      if (aiResult) {
-        setResult(aiResult);
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error Response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+
+      const aiResult = await response.json();
+      console.log('🎯 ChatGPT API response:', aiResult);
+
+      if (aiResult && aiResult.accountCode) {
+        setResult({
+          accountCode: aiResult.accountCode,
+          confidence: aiResult.confidence || 75,
+          reasoning: aiResult.reasoning || 'AI categorization',
+          suggestedKeyword: aiResult.suggestedKeyword,
+          source: 'chatgpt'
+        });
         
-        // Always show popup for manual review - let user decide
-        console.log('🔍 AI categorization result:', aiResult);
+        // Always show popup for manual review
+        console.log('✅ Showing AI result popup');
         setShowResult(true);
       } else {
+        console.error('Invalid AI response:', aiResult);
         setError('AI categorization failed. Please try again.');
-        setShowResult(true); // Show error popup
+        setShowResult(true);
       }
     } catch (err) {
       console.error('AI categorization error:', err);
-      setError('Failed to categorize transaction. Please try manually.');
-      setShowResult(true); // Show error popup
+      
+      // Retry logic for transient network errors
+      if (retryCount < 2 && err instanceof Error && 
+          (err.message.includes('Failed to fetch') || err.name === 'AbortError')) {
+        console.log(`🔄 Retrying request (attempt ${retryCount + 1}/2)...`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        return performAICategorization(retryCount + 1);
+      }
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to categorize transaction. Please try manually.';
+      
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          errorMessage = 'Request timed out. Please try again.';
+        } else if (err.message.includes('Failed to fetch')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else if (err.message.includes('HTTP error')) {
+          errorMessage = 'Server error. Please try again in a moment.';
+        }
+      }
+      
+      setError(errorMessage);
+      setShowResult(true);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleAICategorize = () => {
+    performAICategorization();
   };
 
   const handleApplyResult = () => {
@@ -97,7 +180,9 @@ export default function AICategorizationButton({
   const handleAddKeyword = async () => {
     if (result && result.suggestedKeyword) {
       try {
-        await keywordManager.addKeyword(result.suggestedKeyword, result.accountCode);
+        // Note: We could add this to the unified pattern engine in the future
+        console.log('💡 Suggested keyword:', result.suggestedKeyword, 'for account:', result.accountCode);
+        
         // Clear all states immediately
         setShowKeywordPrompt(false);
         setShowResult(false);
@@ -162,6 +247,19 @@ export default function AICategorizationButton({
       {/* AI Reasoning Popup */}
       {showResult && result && (
         <div className="absolute top-8 right-0 z-50 w-[420px] bg-white border border-slate-200 rounded-lg shadow-lg p-4">
+          {/* Validation Correction Notice */}
+          {result.source === 'chatgpt-corrected' && (
+            <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center gap-2 text-amber-800">
+                <span className="text-sm">⚠️</span>
+                <span className="text-xs font-medium">Auto-Corrected</span>
+              </div>
+              <p className="text-xs text-amber-700 mt-1">
+                The AI suggested an illogical categorization and was automatically corrected for accuracy.
+              </p>
+            </div>
+          )}
+          
           <div className="flex items-start justify-between mb-3">
             <h4 className="font-semibold text-slate-900">AI Categorization</h4>
             <button

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { FinancialData } from '../lib/reportGenerator';
 import type { Transaction, ValidationResult } from '../lib/types';
 import type { BankFormat } from '../data/bankFormats';
@@ -38,9 +38,10 @@ type FinancialDataContextType = {
 
 const FinancialDataContext = createContext<FinancialDataContextType | undefined>(undefined);
 
-// Safe storage utilities with error handling
+// Safe storage utilities with error handling and client-side check
 const safeStorage = {
   set: (key: string, data: any) => {
+    if (typeof window === 'undefined') return false; // Server-side check
     try {
       localStorage.setItem(key, JSON.stringify(data));
       return true;
@@ -50,6 +51,7 @@ const safeStorage = {
     }
   },
   get: (key: string) => {
+    if (typeof window === 'undefined') return null; // Server-side check
     try {
       const item = localStorage.getItem(key);
       if (!item) return null;
@@ -69,6 +71,7 @@ const safeStorage = {
     }
   },
   remove: (key: string) => {
+    if (typeof window === 'undefined') return false; // Server-side check
     try {
       localStorage.removeItem(key);
       return true;
@@ -88,8 +91,14 @@ const STORAGE_KEYS = {
 export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [financialData, setFinancialData] = useState<ExtendedFinancialData | null>(null);
   const [isSample, setIsSample] = useState<boolean>(false);
+  const [mounted, setMounted] = useState(false);
 
-  const setDashboardData = (dashboardData: DashboardData) => {
+  // Client-side mounting
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const setDashboardData = useCallback((dashboardData: DashboardData) => {
     setFinancialData(prev => {
       if (!prev) {
         return {
@@ -106,10 +115,12 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
         dashboard: dashboardData
       };
     });
-  };
+  }, []);
 
-  // Load data from storage on mount (safe)
+  // Load data from storage on mount (client-side only)
   useEffect(() => {
+    if (!mounted) return; // Only run after client-side mount
+    
     try {
       // Load existing data instead of clearing it
       const savedData = safeStorage.get(STORAGE_KEYS.FINANCIAL_DATA);
@@ -129,19 +140,21 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
       console.warn('Failed to load from localStorage:', error);
       // Continue with default state - no breaking
     }
-  }, []);
+  }, [mounted]);
 
-  // Auto-save when data changes (safe)
+  // Auto-save when data changes (client-side only)
   useEffect(() => {
-    if (financialData) {
+    if (!mounted || !financialData) return; // Only run after client-side mount
+    
       safeStorage.set(STORAGE_KEYS.FINANCIAL_DATA, financialData);
       safeStorage.set(STORAGE_KEYS.LAST_UPDATED, new Date().toISOString());
-    }
-  }, [financialData]);
+  }, [financialData, mounted]);
 
   useEffect(() => {
+    if (!mounted) return; // Only run after client-side mount
+    
     safeStorage.set(STORAGE_KEYS.IS_SAMPLE, isSample);
-  }, [isSample]);
+  }, [isSample, mounted]);
 
   // Manual storage functions
   const saveToStorage = () => {
@@ -188,6 +201,22 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
 
 export const useFinancialData = () => {
   const context = useContext(FinancialDataContext);
-  if (!context) throw new Error('useFinancialData must be used within a FinancialDataProvider');
+  if (!context) {
+    // During server-side rendering, context might not be available
+    // Return a safe default instead of throwing
+    if (typeof window === 'undefined') {
+      return {
+        financialData: null,
+        setFinancialData: () => {},
+        setDashboardData: () => {},
+        isSample: false,
+        setIsSample: () => {},
+        saveToStorage: () => {},
+        loadFromStorage: () => {},
+        clearStorage: () => {}
+      };
+    }
+    throw new Error('useFinancialData must be used within a FinancialDataProvider');
+  }
   return context;
 }; 

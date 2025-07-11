@@ -1,54 +1,46 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
-import { Transaction, ValidationResult } from '../lib/types';
-import { BankFormat } from '../data/bankFormats';
+import React, { useState, useEffect, useRef } from 'react';
+import NavigationBar from '../components/NavigationBar';
+import { Transaction, ValidationResult, BankFormat } from '../lib/types';
 import { DuplicateDetectionResult } from '../lib/duplicateDetector';
 import { AIEngine } from '../lib/aiEngine';
 import FileUpload from '../components/FileUpload';
 import ProcessingResults from '../components/ProcessingResults';
 import TransactionTable from '../components/TransactionTable';
 import ExportManager from '../components/ExportManager';
-import DuplicateWarning from '../components/DuplicateWarning';
-import NavigationBar from '../components/NavigationBar';
 import FileFormatError from '../components/FileFormatError';
 import CustomKeywordManager from '../components/CustomKeywordManager';
-import Image from 'next/image';
-import { PROVINCES } from '../data/provinces';
-import { useFinancialData } from '../context/FinancialDataContext';
 import { useAuth } from '../context/AuthContext';
+import { useFinancialData } from '../context/FinancialDataContext';
 import { CommonIcons } from '../lib/iconSystem';
+import { PROVINCES } from '../data/provinces';
+
+interface ProcessingResultsData {
+  validation: ValidationResult;
+  bankFormat: BankFormat | 'Unknown';
+  stats: any;
+}
 
 export default function Dashboard() {
-  const { financialData, setDashboardData } = useFinancialData();
   const { user, loading } = useAuth();
+  const { financialData, setDashboardData } = useFinancialData();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [processingResults, setProcessingResults] = useState<{
-    validation: ValidationResult;
-    bankFormat: BankFormat | 'Unknown';
-    stats: any;
-  } | null>(null);
-  const [duplicateResult, setDuplicateResult] = useState<DuplicateDetectionResult | null>(null);
-  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [processingResults, setProcessingResults] = useState<ProcessingResultsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorFileName, setErrorFileName] = useState<string | undefined>(undefined);
   const [currentStep, setCurrentStep] = useState<'upload' | 'review' | 'export'>('upload');
   const [selectedProvince, setSelectedProvince] = useState('ON');
   const [showKeywordManager, setShowKeywordManager] = useState(false);
-  const [isClient, setIsClient] = useState(false);
+
 
   // AI Engine instance for feedback training (client-side only)
   const aiEngineRef = useRef<AIEngine | null>(null);
-  
-  // Initialize client-side rendering
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      aiEngineRef.current = new AIEngine('ON', user?.id);
+      aiEngineRef.current = new AIEngine(selectedProvince, user?.id);
       (window as any).aiEngine = aiEngineRef.current;
     }
-  }, [user?.id]);
+  }, [user?.id, selectedProvince]);
 
   // Simplified context sync - only restore on mount
   useEffect(() => {
@@ -56,10 +48,26 @@ export default function Dashboard() {
       const { transactions: savedTrans, processingResults: savedResults } = financialData.dashboard;
       if (savedTrans.length > 0) {
         setTransactions(savedTrans);
-        if (savedResults) setProcessingResults(savedResults);
+        if (savedResults) {
+          // Ensure bankFormat is properly typed when restored from context
+          setProcessingResults({
+            ...savedResults,
+            bankFormat: savedResults.bankFormat as BankFormat | 'Unknown'
+          });
+        }
       }
     }
   }, [financialData]);
+
+  // Update dashboard data when province changes
+  useEffect(() => {
+    if (transactions.length > 0) {
+      setDashboardData({
+        transactions,
+        selectedProvince
+      });
+    }
+  }, [selectedProvince, transactions]);
 
   const handleFileProcessed = (data: {
     transactions: Transaction[];
@@ -71,21 +79,14 @@ export default function Dashboard() {
     setTransactions(data.transactions);
     setProcessingResults({
       validation: data.validation,
-      bankFormat: data.bankFormat,
+      bankFormat: data.bankFormat as BankFormat | 'Unknown',
       stats: data.stats
     });
-    
-    // Handle duplicate detection results
-    if (data.duplicateResult) {
-      setDuplicateResult(data.duplicateResult);
-      setShowDuplicateWarning(data.duplicateResult.duplicateCount > 0);
-    }
     
     setError(null);
     setErrorFileName(undefined);
     
     // Stay on upload step - let user manually proceed
-    // setCurrentStep('review'); // REMOVED - no auto step transition
   };
 
   const handleError = (errorMessage: string, fileName?: string) => {
@@ -97,22 +98,36 @@ export default function Dashboard() {
   };
 
   const handleTransactionUpdate = (id: string, updates: Partial<Transaction>) => {
+    console.log('🔄 handleTransactionUpdate called:', {
+      transactionId: id,
+      updates: updates,
+      currentTransactionCount: transactions.length
+    });
+    
     setTransactions(prev => {
+      const transactionBefore = prev.find(t => t.id === id);
+      console.log('📋 Transaction before update:', {
+        transactionId: id,
+        accountCodeBefore: transactionBefore?.accountCode,
+        confidenceBefore: transactionBefore?.confidence,
+        description: transactionBefore?.description
+      });
+      
       const newTransactions = prev.map(t => 
         t.id === id ? { ...t, ...updates } : t
       );
+      
+      const transactionAfter = newTransactions.find(t => t.id === id);
+      console.log('📋 Transaction after update:', {
+        transactionId: id,
+        accountCodeAfter: transactionAfter?.accountCode,
+        confidenceAfter: transactionAfter?.confidence,
+        updates: updates,
+        success: transactionAfter?.accountCode === updates.accountCode
+      });
+      
       return newTransactions;
     });
-  };
-
-  const handleResolveDuplicates = (cleanTransactions: Transaction[]) => {
-    setTransactions(cleanTransactions);
-    setShowDuplicateWarning(false);
-    setDuplicateResult(null);
-  };
-
-  const handleDismissDuplicateWarning = () => {
-    setShowDuplicateWarning(false);
   };
 
   const proceedToExport = () => {
@@ -123,8 +138,6 @@ export default function Dashboard() {
     // Clear all data and go back to upload step
     setTransactions([]);
     setProcessingResults(null);
-    setDuplicateResult(null);
-    setShowDuplicateWarning(false);
     setError(null);
     setErrorFileName(undefined);
     setCurrentStep('upload');
@@ -136,12 +149,12 @@ export default function Dashboard() {
     });
   };
 
-  // Initialize client-side state
-  useEffect(() => {
-    if (isClient) {
-      setCurrentStep('upload');
-    }
-  }, [isClient]);
+  // Initialize client-side state (removed conditional to fix hydration)
+  // useEffect(() => {
+  //   if (isClient) {
+  //     setCurrentStep('upload');
+  //   }
+  // }, [isClient]);
 
   const handleDownloadTemplate = () => {
     // Create and download a sample CSV template
@@ -190,20 +203,33 @@ export default function Dashboard() {
   }
   */
 
+  // Only render title on client to prevent hydration mismatch
+
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
       {/* Professional Navigation Bar */}
       <NavigationBar 
         activeSection="dashboard" 
-        showNewFileButton={isClient && currentStep !== 'upload'}
+        showNewFileButton={currentStep !== 'upload'}
         onNewFile={handleNewFile}
       />
 
       {/* Enhanced Main Content Area */}
-      <div className="relative max-w-screen-xl mx-auto px-2 py-20">
-        <div className="space-y-20">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="space-y-6">
           {/* Enhanced Progress Indicator */}
-          <div className="flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">
+              Meridian AI Bookkeeping
+            </h1>
+            <p className="text-slate-600 mb-8">
+              Intelligent transaction categorization for Canadian businesses
+            </p>
+          </div>
+          
+          {/* Centered Progress Bar Container */}
+          <div className="flex justify-center items-center w-full">
             <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl shadow-slate-500/10 border border-slate-200/50">
               <div className="flex items-center space-x-12">
                 {[
@@ -217,16 +243,16 @@ export default function Dashboard() {
                       index < ['upload', 'review', 'export'].indexOf(currentStep) ? 'text-slate-600' : 
                       'text-slate-400'
                     }`}>
-                                              <div className={`relative w-16 h-16 rounded-3xl flex items-center justify-center text-xl font-medium transition-all duration-500 ${
-                          currentStep === step.id ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white shadow-2xl shadow-purple-500/30 scale-110' : 
-                          index < ['upload', 'review', 'export'].indexOf(currentStep) ? 'bg-purple-50 text-purple-600 border-2 border-purple-200 shadow-lg' : 
-                          'bg-slate-50 text-slate-400 border-2 border-slate-200 shadow-md'
-                        }`}>
-                          <step.icon.icon className={step.icon.className} />
-                          {currentStep === step.id && (
-                            <div className="absolute -inset-2 bg-gradient-to-br from-purple-600 to-purple-700 rounded-3xl blur-lg opacity-20 animate-pulse"></div>
-                          )}
-                        </div>
+                      <div className={`relative w-16 h-16 rounded-3xl flex items-center justify-center text-xl font-medium transition-all duration-500 ${
+                        currentStep === step.id ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white shadow-2xl shadow-purple-500/30 scale-110' : 
+                        index < ['upload', 'review', 'export'].indexOf(currentStep) ? 'bg-purple-50 text-purple-600 border-2 border-purple-200 shadow-lg' : 
+                        'bg-slate-50 text-slate-400 border-2 border-slate-200 shadow-md'
+                      }`}>
+                        <step.icon.icon className={step.icon.className} />
+                        {currentStep === step.id && (
+                          <div className="absolute -inset-2 bg-gradient-to-br from-purple-600 to-purple-700 rounded-3xl blur-lg opacity-20 animate-pulse"></div>
+                        )}
+                      </div>
                       <div className="hidden sm:block text-center">
                         <div className="font-bold text-base">{step.label}</div>
                         <div className="text-sm text-slate-500 mt-1">{step.desc}</div>
@@ -257,48 +283,44 @@ export default function Dashboard() {
           {currentStep === 'upload' && !error && (
             <>
               <div className="bg-white rounded-2xl p-12">
-                <div className="flex items-center space-x-4 mb-8">
-                  <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
-                    <span className="text-slate-600 font-semibold">1</span>
+                <div className="flex items-center justify-center mb-8">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
+                      <span className="text-slate-600 font-semibold">1</span>
+                    </div>
+                    <h2 className="text-2xl font-semibold text-slate-900">
+                      Upload Bank Statement
+                    </h2>
                   </div>
-                  <h2 className="text-2xl font-semibold text-slate-900">
-                    Upload Bank Statement
-                  </h2>
                 </div>
-                <FileUpload onFileProcessed={handleFileProcessed} onError={handleError} disabled={false} />
+                <FileUpload 
+                  onFileProcessed={handleFileProcessed} 
+                  onError={handleError} 
+                  disabled={false}
+                  aiModeEnabled={false}
+                />
               </div>
-
-              {/* Show duplicate warning in upload step */}
-              {showDuplicateWarning && duplicateResult && (
-                <div className="bg-white rounded-2xl p-12">
-                  <DuplicateWarning
-                    duplicateResult={duplicateResult}
-                    onResolveDuplicates={handleResolveDuplicates}
-                    onDismiss={handleDismissDuplicateWarning}
-                  />
-                </div>
-              )}
 
               {/* Show simple success message and next step button if we have processed data */}
               {transactions.length > 0 && (
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-8">
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-6 mb-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                        <span className="text-green-600 text-xl">✓</span>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                        <span className="text-green-600 text-lg">✓</span>
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold text-green-900">
+                        <h3 className="text-base font-semibold text-green-900">
                           File Processed Successfully
                         </h3>
-                        <p className="text-green-700">
+                        <p className="text-sm text-green-700">
                           {transactions.length} transactions ready for review
                         </p>
                       </div>
                     </div>
                     <button
                       onClick={() => setCurrentStep('review')}
-                      className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all duration-200 font-medium"
+                      className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 font-medium text-sm"
                     >
                       Review Transactions →
                     </button>
@@ -312,7 +334,7 @@ export default function Dashboard() {
           {currentStep === 'review' && processingResults && transactions.length > 0 && (
             <>
               <div className="bg-white rounded-2xl p-12">
-                <div className="flex items-center space-x-4 mb-8">
+                <div className="flex items-center justify-center space-x-4 mb-8">
                   <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
                     <span className="text-slate-600 font-semibold">2</span>
                   </div>
@@ -327,7 +349,7 @@ export default function Dashboard() {
 
               {/* Transaction Review */}
               <div className="bg-white rounded-2xl p-12">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center justify-center mb-8">
                   <div className="flex items-center space-x-4">
                     <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
                       <span className="text-slate-600 font-semibold">3</span>
@@ -336,6 +358,8 @@ export default function Dashboard() {
                       Review & Code Transactions
                     </h2>
                   </div>
+                </div>
+                <div className="flex items-center justify-center mb-8">
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={() => setShowKeywordManager(true)}
@@ -358,7 +382,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 {/* Province Selector */}
-                <div className="mb-8 flex items-center space-x-4">
+                <div className="mb-8 flex items-center justify-center space-x-4">
                   <label className="text-sm font-semibold text-gray-700">Province:</label>
                   <select
                     value={selectedProvince}
@@ -370,12 +394,16 @@ export default function Dashboard() {
                     ))}
                   </select>
                 </div>
-                <TransactionTable 
-                  transactions={transactions}
-                  onTransactionUpdate={handleTransactionUpdate}
-                  aiEngine={aiEngineRef.current}
-                  province={selectedProvince}
-                />
+                <div className="flex justify-center">
+                  <div className="w-full max-w-none">
+                    <TransactionTable 
+                      transactions={transactions}
+                      onTransactionUpdate={handleTransactionUpdate}
+                      aiEngine={aiEngineRef.current}
+                      province={selectedProvince}
+                    />
+                  </div>
+                </div>
               </div>
             </>
           )}
@@ -407,10 +435,88 @@ export default function Dashboard() {
                   </button>
                 </div>
               </div>
-              <ExportManager transactions={transactions} province={selectedProvince} />
+              <ExportManager 
+                transactions={transactions} 
+                province={selectedProvince} 
+                onTransactionsUpdate={setTransactions}
+              />
             </div>
           )}
         </div>
+
+        {/* Move Processing Results Information Above Q&A Section */}
+        {currentStep === 'review' && processingResults && (
+          <div className="max-w-6xl mx-auto px-6 lg:px-8 py-12">
+            <div className="bg-white rounded-3xl p-8 border border-slate-200/60 shadow-xl shadow-slate-500/5">
+              <div className="text-center mb-8">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/25">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                  Transaction Processing Complete
+                </h2>
+                <p className="text-slate-600 text-lg">
+                  Your file has been successfully processed and is ready for review
+                </p>
+              </div>
+              
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="bg-gradient-to-br from-green-50 to-green-100/50 rounded-xl p-6 border border-green-200/50">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-green-900">Format Detected</h3>
+                  </div>
+                  <p className="text-green-800 font-medium">
+                    {processingResults.bankFormat === 'Unknown' ? 'Standard CSV' : processingResults.bankFormat}
+                  </p>
+                  <p className="text-green-700 text-sm mt-1">
+                    File format automatically recognized
+                  </p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-6 border border-blue-200/50">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-blue-900">AI Analysis</h3>
+                  </div>
+                  <p className="text-blue-800 font-medium">
+                    {transactions.length} transactions
+                  </p>
+                  <p className="text-blue-700 text-sm mt-1">
+                    Ready for categorization
+                  </p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-xl p-6 border border-purple-200/50">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-purple-900">Next Steps</h3>
+                  </div>
+                  <p className="text-purple-800 font-medium">
+                    Review & Code
+                  </p>
+                  <p className="text-purple-700 text-sm mt-1">
+                    Verify AI categorization
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Q&A Section - Helpful Tips and Usage Guide */}
         <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20">
@@ -420,7 +526,7 @@ export default function Dashboard() {
                 <span className="text-white text-2xl">💡</span>
               </div>
               <h2 className="text-4xl font-bold text-slate-900 mb-4">
-                Frequently Asked Questions
+                Formatting Tips & FAQ
               </h2>
               <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed">
                 Get the most out of Meridian Bookkeeping with these helpful tips and answers to common questions.

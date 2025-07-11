@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AppIcons, CommonIcons } from '../lib/iconSystem';
 import { ChartOfAccounts } from '../lib/chartOfAccounts';
 
@@ -28,18 +28,37 @@ const BulkCategorySelector: React.FC<BulkCategorySelectorProps> = ({
   const [selectedAccountCode, setSelectedAccountCode] = useState<string>('');
   const [filterText, setFilterText] = useState<string>('');
   const [filterType, setFilterType] = useState<'all' | 'unassigned'>('unassigned');
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
 
   // Create ChartOfAccounts instance for the province
-  const chartOfAccounts = useMemo(() => new ChartOfAccounts(province), [province]);
+  const chartOfAccounts = useMemo(() => ChartOfAccounts.getInstance(province), [province]);
+
+  // Initialize chart of accounts for the province
+  useEffect(() => {
+    const initializeAccounts = async () => {
+      setIsLoadingAccounts(true);
+      try {
+        await chartOfAccounts.setProvince(province);
+        await chartOfAccounts.waitForInitialization();
+      } catch (error) {
+        console.error('Failed to initialize chart of accounts:', error);
+      } finally {
+        setIsLoadingAccounts(false);
+      }
+    };
+    
+    initializeAccounts();
+  }, [province, chartOfAccounts]);
 
   // Get available accounts for the province
   const accounts = useMemo(() => {
+    if (isLoadingAccounts) return [];
     const allAccounts = chartOfAccounts.getAllAccounts();
     return allAccounts.map(account => ({
       code: account.code,
       name: account.name
     })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [chartOfAccounts]);
+  }, [chartOfAccounts, isLoadingAccounts]);
 
   // Filter transactions based on current filter
   const filteredTransactions = useMemo(() => {
@@ -78,8 +97,33 @@ const BulkCategorySelector: React.FC<BulkCategorySelectorProps> = ({
   const isIndeterminate = selectedTransactions.size > 0 && selectedTransactions.size < filteredTransactions.length;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+    <div 
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0)', // No overlay
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '16px'
+      }}
+    >
+      <div 
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '16px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          maxWidth: '1152px',
+          width: '100%',
+          maxHeight: '90vh',
+          overflow: 'hidden',
+          border: '1px solid #E2E8F0'
+        }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div>

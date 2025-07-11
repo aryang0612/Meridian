@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction } from '../lib/types';
 import { ChartOfAccounts } from '../lib/chartOfAccounts';
 import { AIEngine } from '../lib/aiEngine';
 import BulkCategorySelector from './BulkCategorySelector';
 import AICategorizationButton from './AICategorizationButton';
+
 import { AppIcons, CommonIcons, IconSizes } from '../lib/iconSystem';
 
 interface Props {
@@ -15,307 +16,357 @@ interface Props {
   province?: string;
 }
 
-type SortField = 'date' | 'description' | 'amount' | 'account' | 'confidence' | 'status' | 'feedback' | 'taxRate';
-type SortDirection = 'asc' | 'desc';
-
-// Notification Popup Component
-function NotificationToast({ message, onClose }: { message: string; onClose: () => void }) {
-  const [visible, setVisible] = useState(true);
-  useEffect(() => {
-    if (!visible) return;
-    const timer = setTimeout(() => {
-      setVisible(false);
-      onClose();
-    }, 8000); // 8 seconds (increased from 5)
-    return () => clearTimeout(timer);
-  }, [visible, onClose]);
-  if (!visible) return null;
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 32,
-      right: 32,
-      background: 'rgba(60, 60, 80, 0.98)',
-      color: 'white',
-      padding: '20px 28px',
-      borderRadius: 16,
-      boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-      zIndex: 9999,
-      minWidth: 280,
-      maxWidth: 380,
-      fontSize: 16,
-      display: 'flex',
-      alignItems: 'center',
-      border: '1px solid rgba(255,255,255,0.1)',
-      backdropFilter: 'blur(10px)',
-    }}>
-      <span style={{ flex: 1, lineHeight: '1.4' }}>{message}</span>
-      <button 
-        onClick={() => { setVisible(false); onClose(); }} 
-        style={{ 
-          marginLeft: 20, 
-          background: 'transparent', 
-          border: 'none', 
-          color: '#fff', 
-          fontWeight: 'bold', 
-          fontSize: 20, 
-          cursor: 'pointer',
-          padding: '4px 8px',
-          borderRadius: '4px',
-          transition: 'background-color 0.2s'
-        }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-      >
-        &times;
-      </button>
-    </div>
-  );
-}
-
-function TransactionTable({ transactions, onTransactionUpdate, aiEngine, province = 'ON' }: Props) {
+export default function TransactionTable({ transactions, onTransactionUpdate, aiEngine, province = 'ON' }: Props) {
+  const [notification, setNotification] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'needs-review' | 'high-confidence'>('all');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingField, setEditingField] = useState<'account' | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showSmartSelect, setShowSmartSelect] = useState(false);
-  const [showBulkSelector, setShowBulkSelector] = useState(false);
-  const [sortField, setSortField] = useState<SortField>('date');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [notification, setNotification] = useState<string | null>(null);
-  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; isProcessing: boolean }>({ current: 0, total: 0, isProcessing: false });
   const [viewMode, setViewMode] = useState<'table' | 'grouped'>('table');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [manualProgress, setManualProgress] = useState<{ recentlyUpdated: Set<string>; showProgress: boolean }>({ recentlyUpdated: new Set(), showProgress: false });
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; isProcessing: boolean }>({ current: 0, total: 0, isProcessing: false });
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+  const [bulkCategorySuggestion, setBulkCategorySuggestion] = useState<{
+    show: boolean;
+    sourceTransaction: Transaction | null;
+    similarTransactions: Transaction[];
+    suggestedAccount: string;
+  }>({ show: false, sourceTransaction: null, similarTransactions: [], suggestedAccount: '' });
+
+  // Close modal on escape key and prevent body scroll
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && bulkCategorySuggestion.show) {
+        handleRejectBulkCategorization();
+      }
+    };
+    
+    if (bulkCategorySuggestion.show) {
+      console.log('🔍 Modal is showing, state:', bulkCategorySuggestion);
+      document.addEventListener('keydown', handleEscape);
+      document.body.classList.add('modal-open'); // Prevent background scroll
+      return () => {
+        document.removeEventListener('keydown', handleEscape);
+        document.body.classList.remove('modal-open'); // Restore scroll
+      };
+    } else {
+      console.log('🔍 Modal is hidden');
+    }
+  }, [bulkCategorySuggestion.show]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
 
   // Use singleton Chart of Accounts instance
   const chartOfAccounts = useMemo(() => ChartOfAccounts.getInstance(province), [province]);
 
-  // Sorting function
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('desc');
-    }
-  };
-
-  // Sort arrow component
-  const SortArrow = ({ field }: { field: SortField }) => {
-    if (sortField !== field) {
-      return (
-        <span className="inline-block w-3 h-3 ml-1 text-slate-300 hover:text-slate-400 transition-colors">
-          ↕
-        </span>
-      );
-    }
-    return (
-      <span className={`inline-block w-3 h-3 ml-1 transition-colors ${
-        sortDirection === 'asc' ? 'text-purple-600' : 'text-purple-600'
-      }`}>
-        {sortDirection === 'asc' ? '↑' : '↓'}
-      </span>
-    );
-  };
-
-  // Sortable header component
-  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <button
-      onClick={() => handleSort(field)}
-      className="flex items-center text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-purple-600 transition-colors group"
-    >
-      {children}
-      <SortArrow field={field} />
-    </button>
-  );
-
-  // Chart of Accounts is always ready with hardcoded data
+  // Ensure chart of accounts is loaded for the current province
   useEffect(() => {
-    console.log('✅ Chart of Accounts ready, accounts available:', chartOfAccounts.getAllAccounts().length);
-  }, [chartOfAccounts, province]);
-  
-  // Get available account codes (no longer using categories)
-  const accountCodes = useMemo(() => {
-    const availableAccounts = chartOfAccounts.getAllAccounts();
-    const codes = availableAccounts.map(account => account.code).sort();
-    return codes;
-  }, [chartOfAccounts]);
+    console.log(`📊 TransactionTable: Province changed to ${province}, reinitializing Chart of Accounts...`);
+    
+    const initializeAccounts = async () => {
+      setIsLoadingAccounts(true);
+      try {
+        await chartOfAccounts.setProvince(province);
+        await chartOfAccounts.waitForInitialization();
+        console.log(`✅ TransactionTable: Chart of Accounts ready for province ${province}`);
+      } catch (error) {
+        console.error('❌ TransactionTable: Failed to initialize chart of accounts:', error);
+      } finally {
+        setIsLoadingAccounts(false);
+      }
+    };
+    
+    initializeAccounts();
+  }, [province, chartOfAccounts]);
 
-  // Helper function to get account by code
-  const getAccountByCode = (code: string) => {
-    return chartOfAccounts.getAccount(code);
-  };
+  // Simple stats calculation
+  const stats = useMemo(() => {
+    const total = transactions.length;
+    const needsReview = transactions.filter(t => !t.accountCode || (t.confidence || 0) < 70).length;
+    const highConfidence = transactions.filter(t => (t.confidence || 0) >= 90 && t.accountCode).length;
+    const approved = transactions.filter(t => t.isApproved).length;
+    return { total, needsReview, highConfidence, approved };
+  }, [transactions]);
+
+  // Simple categorization progress
+  const categorizationProgress = useMemo(() => {
+    const total = transactions.length;
+    const categorized = transactions.filter(t => t.accountCode && t.accountCode !== '').length;
+    const approved = transactions.filter(t => t.isApproved).length;
+    const needsReview = transactions.filter(t => !t.accountCode || (t.confidence || 0) < 70).length;
+    const highConfidence = transactions.filter(t => (t.confidence || 0) >= 90 && t.accountCode).length;
+    
+    return {
+      total,
+      categorized,
+      approved,
+      needsReview,
+      highConfidence,
+      categorizedPercentage: total > 0 ? Math.round((categorized / total) * 100) : 0
+    };
+  }, [transactions]);
+
+  // Get available account codes
+  const accountCodes = useMemo(() => {
+    if (isLoadingAccounts || !chartOfAccounts.isReady()) {
+      return [];
+    }
+    const availableAccounts = chartOfAccounts.getAllAccounts();
+    return availableAccounts.map(account => account.code).sort();
+  }, [chartOfAccounts, isLoadingAccounts]);
 
   const accounts = useMemo(() => {
-    const expenseAccounts = chartOfAccounts.getAccountsByType('Expense');
-    const revenueAccounts = chartOfAccounts.getAccountsByType('Revenue');
-    const assetAccounts = chartOfAccounts.getAccountsByType('Asset');
-    const combinedAccounts = expenseAccounts.concat(revenueAccounts).concat(assetAccounts).sort((a, b) => a.name.localeCompare(b.name));
-    console.log('📊 Available accounts:', combinedAccounts.length, 'Expense:', expenseAccounts.length, 'Revenue:', revenueAccounts.length, 'Asset:', assetAccounts.length);
-    return combinedAccounts;
-  }, [chartOfAccounts]);
+    if (isLoadingAccounts || !chartOfAccounts.isReady()) {
+      return [];
+    }
+    return chartOfAccounts.getAllAccounts();
+  }, [chartOfAccounts, isLoadingAccounts]);
+
+  // Simple filtered transactions
+  const filteredTransactions = useMemo(() => {
+    let filtered = transactions;
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(transaction => 
+        transaction.description.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Apply status filter
+    if (filter === 'needs-review') {
+      filtered = filtered.filter(t => !t.accountCode || (t.confidence || 0) < 70);
+    } else if (filter === 'high-confidence') {
+      filtered = filtered.filter(t => (t.confidence || 0) >= 90 && t.accountCode);
+    }
+
+    return filtered;
+  }, [transactions, searchTerm, filter]);
+
+  // Simple grouped transactions
+  const groupedTransactions = useMemo(() => {
+    const grouped: { [key: string]: Transaction[] } = {};
+    filteredTransactions.forEach(transaction => {
+      const key = transaction.accountCode || 'Uncategorized';
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push(transaction);
+    });
+    return grouped;
+  }, [filteredTransactions]);
 
   // Helper function to get account name
   const getAccountName = (accountCode: string | undefined): string => {
     if (!accountCode) return 'Uncategorized';
-    const account = chartOfAccounts.getAccount(accountCode.trim());
-    if (!account) {
-      // Debug logging for code mismatches
-      const availableCodes = chartOfAccounts.getAllAccounts().map(a => a.code);
-      console.warn('Account code not found:', accountCode, 'Available codes:', availableCodes.slice(0, 10), '... (total:', availableCodes.length, ')');
-      return `Unknown Account (${accountCode})`;
-    }
-    return account.name || 'Uncategorized';
+    const account = chartOfAccounts.getAccount(accountCode);
+    return account?.name || 'Uncategorized';
   };
 
-  // Get tax rate based on province and transaction type
-  const getTaxRate = (transaction: Transaction): number | undefined => {
-    // If tax rate is already set, return it
-    if (transaction.taxRate !== undefined) {
-      return transaction.taxRate;
-    }
-
-    // Auto-assign tax rates based on province and transaction type
-    const provinceTaxRates: { [key: string]: number } = {
-      'ON': 13, // HST
-      'BC': 12, // HST
-      'AB': 5,  // GST only
-      'SK': 11, // GST + PST
-      'MB': 12, // GST + PST
-      'QC': 14.975, // GST + QST
-      'NB': 15, // HST
-      'NL': 15, // HST
-      'NS': 15, // HST
-      'PE': 15, // HST
-      'NT': 5,  // GST only
-      'NU': 5,  // GST only
-      'YT': 5   // GST only
-    };
-
-    const baseTaxRate = provinceTaxRates[province] || 0;
-
-    // Zero-rated or exempt categories
-    const zeroRatedCategories = [
-      'E-Transfer',
-      'Payroll',
-      'Cheques',
-      'Bank Fees',
-      'Interest Income',
-      'Investment Income',
-      'Uncategorized',
-      'Sales Revenue',
-      'Service Revenue',
-      'Other Revenue',
-      'Accounts Receivable',
-      'Prepayments',
-      'Inventory',
-      'Notes Receivable',
-      'Equipment',
-      'Vehicles',
-      'Computer Equipment',
-      'Accounts Payable',
-      'Notes Payable',
-      'Wages Payable',
-      'Sales Tax',
-      'Employee Tax Payable',
-      'Income Tax Payable',
-      'Due To/From Shareholders',
-      'Loan',
-      'Owner A Share Capital',
-      'Depreciation',
-      'Donations',
-      'Income Tax Expense',
-      'Property Tax',
-      'Bad Debts'
-    ];
-
-    // Check if transaction should be zero-rated
-    if (zeroRatedCategories.includes(transaction.category || '')) {
-      return 0;
-    }
-
-    // For expenses, apply tax rate
-    if (transaction.amount < 0) {
-      return baseTaxRate;
-    }
-
-    // For income, usually no tax on the transaction itself (tax is on profit)
-    return 0;
-  };
-
-  // Filter and sort transactions
-  const filteredTransactions = useMemo(() => {
-    let filtered = transactions;
+  // Helper function to get tax rate from account
+  const getTaxRate = (accountCode: string | undefined): number | undefined => {
+    if (!accountCode) return undefined;
     
-    // Apply confidence filter
-    if (filter === 'needs-review') {
-      filtered = filtered.filter(t => (t.confidence ?? 0) < 80 || !t.accountCode);
-    } else if (filter === 'high-confidence') {
-      filtered = filtered.filter(t => (t.confidence ?? 0) >= 80 && t.accountCode);
+    // Debug the Chart of Accounts state
+    const currentProvince = chartOfAccounts.getProvince();
+    const isReady = chartOfAccounts.isReady();
+    
+    console.log(`💰 Tax rate lookup for account ${accountCode}:`, {
+      accountCode,
+      currentProvince,
+      chartOfAccountsReady: isReady,
+      accountsLoaded: chartOfAccounts.getAllAccounts().length
+    });
+    
+    const account = chartOfAccounts.getAccount(accountCode);
+    if (!account || !account.taxCode) {
+      console.log(`❌ No account or tax code found for ${accountCode}`);
+      return undefined;
     }
+    
+    // Extract percentage from tax code (e.g., "ON - HST on Sales (13%)" -> 13)
+    const match = account.taxCode.match(/\((\d+(?:\.\d+)?)%\)/);
+    const taxRate = match ? parseFloat(match[1]) : undefined;
+    
+    // Enhanced debug logging to see what's happening
+    console.log(`💰 Tax rate calculation for ${accountCode}:`, {
+      accountName: account.name,
+      taxCode: account.taxCode,
+      extractedTaxRate: taxRate,
+      province: currentProvince,
+      isReady
+    });
+    
+    return taxRate;
+  };
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(t => 
-        t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        // Category search removed - using account codes only
-        t.merchant?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+  // Force re-render when Chart of Accounts is updated
+  const [chartUpdateTrigger, setChartUpdateTrigger] = useState(0);
+  
+  useEffect(() => {
+    // Trigger re-render when Chart of Accounts is ready
+    if (!isLoadingAccounts && chartOfAccounts.isReady()) {
+      setChartUpdateTrigger(prev => prev + 1);
+      console.log(`🔄 TransactionTable: Forcing re-render due to Chart of Accounts update`);
     }
+  }, [isLoadingAccounts, chartOfAccounts, province]);
 
-    // Apply sorting
-    filtered.sort((a, b) => {
-      let aValue: any, bValue: any;
-      
-      switch (sortField) {
-        case 'date':
-          aValue = new Date(a.date).getTime();
-          bValue = new Date(b.date).getTime();
-          break;
-        case 'description':
-          aValue = a.description.toLowerCase();
-          bValue = b.description.toLowerCase();
-          break;
-        case 'amount':
-          aValue = Math.abs(a.amount);
-          bValue = Math.abs(b.amount);
-          break;
-              // Category sorting removed - using account codes only
-        case 'account':
-          aValue = (a.accountCode || '').toLowerCase();
-          bValue = (b.accountCode || '').toLowerCase();
-          break;
-        case 'confidence':
-          aValue = a.confidence ?? 0;
-          bValue = b.confidence ?? 0;
-          break;
-        case 'status':
-          aValue = a.isApproved ? 1 : 0;
-          bValue = b.isApproved ? 1 : 0;
-          break;
-        case 'feedback':
-          aValue = a.feedback ? 1 : 0;
-          bValue = b.feedback ? 1 : 0;
-          break;
-        case 'taxRate':
-          aValue = a.taxRate ?? 0;
-          bValue = b.taxRate ?? 0;
-          break;
-        default:
-          return 0;
+  // Helper function to extract core merchant name from transaction description
+  const extractMerchantName = (description: string): string => {
+    // Convert to uppercase for consistent comparison
+    let cleaned = description.toUpperCase().trim();
+    
+    // Remove common transaction metadata patterns
+    cleaned = cleaned
+      // Remove trailing numbers/codes (like "13824", "98765")
+      .replace(/\s+\d{3,}$/g, '')
+      // Remove common location codes (CA, ON, AB, etc.)
+      .replace(/\s+(CA|ON|AB|BC|QC|MB|SK|NS|NB|PE|NL|YT|NT|NU)$/g, '')
+      // Remove phone numbers and reference codes
+      .replace(/\s+\d{3}-\d{3}-\d{4}/g, '')
+      .replace(/\s+\d{10,}/g, '')
+      // Remove common payment indicators
+      .replace(/\s+(PAYMENT|PAY|BILL|BILLING)$/g, '')
+      // Remove location/address patterns
+      .replace(/\s+#\d+/g, '') // Remove location numbers like "#34"
+      .replace(/\s+\d+\s+[A-Z\s]+$/g, '') // Remove addresses like "4617 BEECH HILL"
+      // Remove trailing single letters/numbers
+      .replace(/\s+[A-Z]$/g, '')
+      .replace(/\s+\d$/g, '')
+      .trim();
+    
+    return cleaned;
+  };
+
+  // Helper function to find truly similar transactions (same merchant, different reference numbers)
+  const findSimilarTransactions = (targetTransaction: Transaction): Transaction[] => {
+    const targetMerchant = extractMerchantName(targetTransaction.description);
+    
+    // Don't suggest bulk categorization for very generic descriptions
+    if (targetMerchant.length < 3 || 
+        ['UNKNOWN', 'MISC', 'PAYMENT', 'TRANSFER', 'DEPOSIT', 'WITHDRAWAL'].includes(targetMerchant)) {
+      return [];
+    }
+    
+    console.log(`🔍 Extracted merchant name: "${targetMerchant}" from "${targetTransaction.description}"`);
+    
+    const similar = transactions.filter(transaction => {
+      if (transaction.id === targetTransaction.id) {
+        return false;
       }
       
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
+      const transactionMerchant = extractMerchantName(transaction.description);
+      
+      // Exact merchant name match
+      const exactMatch = transactionMerchant === targetMerchant;
+      
+      // Very close merchant name match (for slight variations)
+      const veryCloseMatch = targetMerchant.length > 5 && transactionMerchant.length > 5 && 
+        (transactionMerchant.includes(targetMerchant) || targetMerchant.includes(transactionMerchant));
+      
+      // For longer merchant names, allow minor variations
+      const closeMatch = targetMerchant.length >= 8 && transactionMerchant.length >= 8 &&
+        Math.abs(targetMerchant.length - transactionMerchant.length) <= 3 &&
+        targetMerchant.substring(0, Math.min(6, targetMerchant.length)) === 
+        transactionMerchant.substring(0, Math.min(6, transactionMerchant.length));
+      
+      return exactMatch || veryCloseMatch || closeMatch;
     });
+    
+    // Only include transactions that aren't already categorized with the same account
+    const filteredSimilar = similar.filter(transaction => {
+      return !transaction.accountCode || 
+             transaction.accountCode === '453' || // Default fallback account
+             (transaction.confidence && transaction.confidence < 70) || // Low confidence
+             transaction.accountCode !== targetTransaction.accountCode; // Different category
+    });
+    
+    console.log(`🔍 Found ${filteredSimilar.length} truly similar transactions for merchant "${targetMerchant}"`);
+    if (filteredSimilar.length > 0) {
+      console.log('📋 Similar merchant transactions:', filteredSimilar.map(t => `"${t.description}"`));
+    }
+    
+    return filteredSimilar;
+  };
 
-    return filtered;
-  }, [transactions, filter, searchTerm, sortField, sortDirection]);
+  // Basic handlers
+  const handleAccountChange = (id: string, accountCode: string) => {
+    try {
+      onTransactionUpdate(id, { accountCode });
+      setManualProgress(prev => ({ ...prev, recentlyUpdated: new Set([...prev.recentlyUpdated, id]) }));
+      
+      // Show bulk categorization suggestion if account is being set (not cleared)
+      if (accountCode) {
+        const sourceTransaction = transactions.find(t => t.id === id);
+        console.log(`🔍 Checking for similar transactions to "${sourceTransaction?.description}"`);
+        
+        if (sourceTransaction) {
+          const similarTransactions = findSimilarTransactions(sourceTransaction);
+          console.log(`🔍 Found ${similarTransactions.length} similar transactions`);
+          
+          if (similarTransactions.length > 0) {
+            console.log(`✅ Showing bulk categorization modal for ${similarTransactions.length} similar transactions`);
+            setBulkCategorySuggestion({
+              show: true,
+              sourceTransaction,
+              similarTransactions,
+              suggestedAccount: accountCode
+            });
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      setNotification('Error updating transaction');
+    }
+  };
 
-  // Smart selection functions
+  // Individual AI categorization handler
+  const handleIndividualAICategorize = (transactionId: string, accountCode: string, confidence: number) => {
+    onTransactionUpdate(transactionId, { accountCode, confidence });
+    setNotification(`AI categorized transaction to ${getAccountName(accountCode)}`);
+    
+    // Show bulk categorization suggestion for AI categorization as well
+    const sourceTransaction = transactions.find(t => t.id === transactionId);
+    if (sourceTransaction) {
+      const similarTransactions = findSimilarTransactions(sourceTransaction);
+      if (similarTransactions.length > 0) {
+        console.log('🤖 AI categorization triggering bulk modal:', {
+          sourceTransaction: sourceTransaction?.description,
+          similarCount: similarTransactions.length,
+          suggestedAccount: accountCode,
+          accountName: getAccountName(accountCode)
+        });
+        setBulkCategorySuggestion({
+          show: true,
+          sourceTransaction,
+          similarTransactions,
+          suggestedAccount: accountCode
+        });
+      }
+    }
+  };
+
+  // Individual approve handler
+  const handleIndividualApprove = (transactionId: string) => {
+    onTransactionUpdate(transactionId, { isApproved: true });
+    setNotification('Transaction approved');
+  };
+
+  // Individual unapprove handler
+  const handleIndividualUnapprove = (transactionId: string) => {
+    onTransactionUpdate(transactionId, { isApproved: false });
+    setNotification('Transaction approval removed');
+  };
+
   const handleSmartSelect = (criteria: string) => {
     let transactionsToSelect: Transaction[] = [];
     
@@ -324,217 +375,73 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
         transactionsToSelect = filteredTransactions.filter(t => !t.accountCode);
         break;
       case 'low-confidence':
-        transactionsToSelect = filteredTransactions.filter(t => (t.confidence ?? 0) < 70);
+        transactionsToSelect = filteredTransactions.filter(t => (t.confidence || 0) < 70);
         break;
       case 'high-confidence':
-        transactionsToSelect = filteredTransactions.filter(t => (t.confidence ?? 0) >= 90 && t.accountCode);
+        transactionsToSelect = filteredTransactions.filter(t => (t.confidence || 0) >= 90);
         break;
-      case 'no-account':
-        transactionsToSelect = filteredTransactions.filter(t => !t.accountCode);
-        break;
-      case 'unapproved':
-        transactionsToSelect = filteredTransactions.filter(t => !t.isApproved);
-          break;
-      case 'large-amounts':
-        transactionsToSelect = filteredTransactions.filter(t => Math.abs(t.amount) > 100);
-          break;
-      case 'small-amounts':
-        transactionsToSelect = filteredTransactions.filter(t => Math.abs(t.amount) <= 50);
-          break;
-      case 'this-month':
-        const thisMonth = new Date().getMonth();
-        const thisYear = new Date().getFullYear();
-        transactionsToSelect = filteredTransactions.filter(t => {
-          const transactionDate = new Date(t.date);
-          return transactionDate.getMonth() === thisMonth && transactionDate.getFullYear() === thisYear;
-        });
-          break;
+      default:
+        transactionsToSelect = [];
     }
     
     const newSelected = new Set(transactionsToSelect.map(t => t.id));
     setSelectedTransactions(newSelected);
     setShowBulkActions(newSelected.size > 0);
-    setShowSmartSelect(false);
   };
 
-  // Similar transaction logic moved to utility function
-  const findSimilarTransactions = (sourceTransaction: Transaction): Transaction[] => {
-    return filteredTransactions.filter(t => {
-      if (t.id === sourceTransaction.id) return false;
-      return (
-        (sourceTransaction.merchant && t.merchant && sourceTransaction.merchant === t.merchant) ||
-        (Math.abs(t.amount - sourceTransaction.amount) < 0.01)
-      );
+  const handleBulkUpdate = (updates: { id: string; accountCode: string }[]) => {
+    console.log('🔄 handleBulkUpdate called with:', updates);
+    updates.forEach(update => {
+      console.log(`🔄 Updating transaction ${update.id} with account code ${update.accountCode}`);
+      onTransactionUpdate(update.id, { accountCode: update.accountCode });
     });
+    setNotification(`Updated ${updates.length} transactions`);
   };
 
-  // Category change function removed - using account codes only
-
-  const handleAccountChange = (id: string, accountCode: string) => {
-    onTransactionUpdate(id, { 
-      accountCode, 
-      isManuallyEdited: true,
-      confidence: 95
-    });
-    setEditingId(null);
-    setEditingField(null);
-
-    // Find similar transactions and offer bulk update
-    const sourceTransaction = transactions.find(t => t.id === id);
-    if (sourceTransaction) {
-      const similarTransactions = findSimilarTransactions(sourceTransaction);
-      
-      if (similarTransactions.length > 0) {
-        const shouldApply = confirm(
-          `Apply same account to ${similarTransactions.length} similar transactions?`
-        );
-        if (shouldApply) {
-          similarTransactions.forEach(t => {
-            onTransactionUpdate(t.id, { accountCode, isManuallyEdited: true, confidence: 95 });
-          });
-        }
+  // Bulk categorization handlers
+  const handleAcceptBulkCategorization = () => {
+    console.log('🎯 handleAcceptBulkCategorization called');
+    console.log('🎯 bulkCategorySuggestion:', bulkCategorySuggestion);
+    try {
+      if (bulkCategorySuggestion.similarTransactions.length > 0) {
+        const updates = bulkCategorySuggestion.similarTransactions.map(t => ({
+          id: t.id,
+          accountCode: bulkCategorySuggestion.suggestedAccount
+        }));
+        console.log('🎯 Updates to be applied:', updates);
+        handleBulkUpdate(updates);
+        setNotification(`Applied ${getAccountName(bulkCategorySuggestion.suggestedAccount)} to ${updates.length} similar transactions`);
+      } else {
+        console.log('🎯 No similar transactions found to update');
+        setNotification('No similar transactions found to update');
       }
+    } catch (error) {
+      console.error('Error in bulk categorization:', error);
+      setNotification('Error applying bulk categorization');
+    } finally {
+      // Always close the modal
+      setBulkCategorySuggestion({ show: false, sourceTransaction: null, similarTransactions: [], suggestedAccount: '' });
+      document.body.style.overflow = 'unset'; // Ensure scroll is restored
     }
   };
 
-  const invalidAccountCodeWarned: Record<string, boolean> = {};
-
-  const handleAICategorize = (id: string, accountCode: string, confidence: number) => {
-    const transaction = transactions.find(t => t.id === id);
-    console.log('🎯 handleAICategorize called with:', {
-      transactionId: id,
-      accountCode: accountCode,
-      confidence: confidence,
-      transactionDescription: transaction?.description,
-      currentAccountCode: transaction?.accountCode,
-      totalAvailableCodes: accountCodes.length
-    });
-    
-    // Extract just the numeric code from formats like "420 - Entertainment" or "420"
-    const extractedCode = accountCode.split(' - ')[0].split(' ')[0].trim();
-    
-    console.log('🔍 Account code validation:', {
-      original: accountCode,
-      extracted: extractedCode,
-      isExtractedValid: accountCodes.includes(extractedCode),
-      isOriginalValid: accountCodes.includes(accountCode),
-      availableCodesFirst10: accountCodes.slice(0, 10),
-      availableCodesTotal: accountCodes.length
-    });
-    
-    // Defensive: Only allow valid account codes
-    const safeAccountCode = accountCodes.includes(extractedCode) ? extractedCode : 
-                           accountCodes.includes(accountCode) ? accountCode : undefined;
-    
-    if (!safeAccountCode) {
-      console.warn('🚨 Invalid account code suggested:', { 
-        original: accountCode, 
-        extracted: extractedCode,
-        availableCodes: accountCodes.slice(0, 10) // Show first 10 for debugging
-      });
-      setNotification(`AI suggested an invalid account code (${accountCode}). Please review.`);
-    }
-    
-    const updates: Partial<Transaction> = {
-      accountCode: safeAccountCode,
-      confidence,
-      aiCategorized: true
-    };
-    
-    console.log('🎯 Applying AI categorization:', {
-      transactionId: id,
-      originalAccountCode: accountCode,
-      extractedCode: extractedCode,
-      safeAccountCode: safeAccountCode,
-      confidence: confidence,
-      updates: updates
-    });
-    
-    onTransactionUpdate(id, updates);
-    
-    if (safeAccountCode) {
-      setNotification(`✅ AI assigned account ${safeAccountCode} - ${getAccountName(safeAccountCode)} (${confidence}% confidence)`);
-    }
+  const handleRejectBulkCategorization = () => {
+    console.log('🔄 Closing bulk categorization modal');
+    setBulkCategorySuggestion({ show: false, sourceTransaction: null, similarTransactions: [], suggestedAccount: '' });
+    document.body.style.overflow = 'unset'; // Ensure scroll is restored
   };
 
-  const handleApprove = (id: string) => {
-    const transaction = transactions.find(t => t.id === id);
-    if (!transaction) return;
-    if (!transaction.accountCode || !accountCodes.includes(transaction.accountCode)) {
-      setNotification('Cannot approve: Transaction does not have a valid account code.');
-      return;
-    }
-    onTransactionUpdate(id, { isApproved: true });
-  };
-
-  const handleFeedback = (id: string, isCorrect: boolean) => {
-    const transaction = transactions.find(t => t.id === id);
-    if (!transaction) return;
-
-    console.log('🔄 Feedback received:', { 
-      transactionId: id, 
-      isCorrect, 
-      accountCode: transaction.accountCode,
-      description: transaction.description,
-      aiEngineAvailable: !!aiEngine 
+  const handleBulkApprove = () => {
+    selectedTransactions.forEach(id => {
+      onTransactionUpdate(id, { isApproved: true });
     });
-
-    const feedback = {
-      isCorrect,
-      timestamp: Date.now(),
-      correctedAccount: isCorrect ? undefined : transaction.accountCode
-    };
-
-    onTransactionUpdate(id, { feedback });
-
-    // Train AI engine if available (safe addition)
-    if (aiEngine && transaction.accountCode) {
-      if (isCorrect) {
-        console.log('✅ Training AI with correct account assignment:', {
-          description: transaction.originalDescription || transaction.description,
-          accountCode: transaction.accountCode
-        });
-        // Record that this account assignment was correct
-        aiEngine.recordUserCorrection(
-          transaction.originalDescription || transaction.description,
-          transaction.accountCode
-        );
-      }
-      // Note: For incorrect feedback, we'll train when user actually makes the correction
-    } else {
-      console.log('⚠️ AI training skipped:', { 
-        aiEngine: !!aiEngine, 
-        hasAccountCode: !!transaction.accountCode 
-      });
-    }
-
-    // If incorrect, allow user to make corrections
-    if (!isCorrect) {
-      setEditingId(id);
-                                  setEditingField('account');
-    }
+    setSelectedTransactions(new Set());
+    setShowBulkActions(false);
+    setNotification(`Approved ${selectedTransactions.size} transactions`);
   };
 
-  const clearFeedback = (id: string) => {
-    onTransactionUpdate(id, { feedback: undefined });
-  };
 
-  // Group transactions by account code
-  const groupedTransactions = useMemo(() => {
-    const groups: { [accountCode: string]: Transaction[] } = {};
-    
-    filteredTransactions.forEach(transaction => {
-      const accountCode = transaction.accountCode || 'Uncategorized';
-      if (!groups[accountCode]) {
-        groups[accountCode] = [];
-      }
-      groups[accountCode].push(transaction);
-    });
 
-    return groups;
-  }, [filteredTransactions]);
-
-  // Toggle group expansion
   const toggleGroup = (accountCode: string) => {
     const newExpanded = new Set(expandedGroups);
     if (newExpanded.has(accountCode)) {
@@ -543,17 +450,6 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
       newExpanded.add(accountCode);
     }
     setExpandedGroups(newExpanded);
-  };
-
-  const handleSelectTransaction = (id: string, checked: boolean) => {
-    const newSelected = new Set(selectedTransactions);
-    if (checked) {
-      newSelected.add(id);
-    } else {
-      newSelected.delete(id);
-    }
-    setSelectedTransactions(newSelected);
-    setShowBulkActions(newSelected.size > 0);
   };
 
   const handleSelectAll = (checked: boolean) => {
@@ -566,208 +462,319 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
     }
   };
 
-  const handleBulkApprove = () => {
-    selectedTransactions.forEach(id => {
-      onTransactionUpdate(id, { isApproved: true });
-    });
-    setSelectedTransactions(new Set());
-    setShowBulkActions(false);
-  };
+  // Notification Toast Component
+  const NotificationToast = ({ message, onClose }: { message: string; onClose: () => void }) => {
+    useEffect(() => {
+      const timer = setTimeout(() => onClose(), 3000);
+      return () => clearTimeout(timer);
+    }, [onClose]);
 
-  const handleBulkAICategorize = async () => {
-    if (selectedTransactions.size === 0) return;
-    
-    const selectedTransactionsList = Array.from(selectedTransactions)
-      .map(id => transactions.find(t => t.id === id))
-      .filter(t => t && !t.accountCode); // Only uncategorized transactions
-    
-    if (selectedTransactionsList.length === 0) {
-      setNotification('No uncategorized transactions selected');
-      return;
-    }
-
-    setBatchProgress({ current: 0, total: selectedTransactionsList.length, isProcessing: true });
-    
-    let successCount = 0;
-    let errorCount = 0;
-    
-    // Process transactions in batches of 3 to avoid overwhelming the API
-    for (let i = 0; i < selectedTransactionsList.length; i += 3) {
-      const batch = selectedTransactionsList.slice(i, i + 3);
-      
-      const batchPromises = batch.map(async (transaction) => {
-        if (!transaction) return;
-        
-        try {
-          const response = await fetch('/api/ai-categorize', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              transaction: {
-                description: transaction.description,
-                amount: transaction.amount
-              },
-              forceAI: true
-            })
-          });
-          
-          const result = await response.json();
-          
-          if (response.ok && result.accountCode) {
-            onTransactionUpdate(transaction.id, {
-              accountCode: result.accountCode,
-              confidence: result.confidence
-            });
-            successCount++;
-          } else {
-            errorCount++;
-          }
-          
-          setBatchProgress(prev => ({ ...prev, current: prev.current + 1 }));
-        } catch (error) {
-          console.error('Batch AI categorization error:', error);
-          errorCount++;
-          setBatchProgress(prev => ({ ...prev, current: prev.current + 1 }));
-        }
-      });
-      
-      await Promise.all(batchPromises);
-      
-      // Small delay between batches to avoid rate limiting
-      if (i + 3 < selectedTransactionsList.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-    
-    setBatchProgress({ current: 0, total: 0, isProcessing: false });
-    setNotification(
-      `AI categorization complete: ${successCount} successful, ${errorCount} failed`
+    return (
+      <div className="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+        <div className="flex items-center space-x-2">
+          <span>{message}</span>
+          <button onClick={onClose} className="text-white hover:text-gray-200">
+            ×
+          </button>
+        </div>
+      </div>
     );
-    setSelectedTransactions(new Set());
-    setShowBulkActions(false);
   };
 
-  const handleBulkUpdate = (updates: { id: string; accountCode: string }[]) => {
-    updates.forEach(({ id, accountCode }) => {
-      onTransactionUpdate(id, {
-        accountCode,
-        confidence: 95,
-        isManuallyEdited: true
-      });
-    });
-    setShowBulkSelector(false);
-  };
+  // Searchable Account Dropdown Component
+  const SearchableAccountDropdown = ({ 
+    currentValue, 
+    onSelect, 
+    placeholder = "Select account..." 
+  }: { 
+    currentValue: string; 
+    onSelect: (accountCode: string) => void; 
+    placeholder?: string; 
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [highlightedIndex, setHighlightedIndex] = useState(0);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleAutoApproveHighConfidence = () => {
-    const highConfidenceTransactions = filteredTransactions.filter(t => 
-      (t.confidence ?? 0) >= 90 && t.accountCode && !t.isApproved
-    );
-    
-    highConfidenceTransactions.forEach(t => {
-      onTransactionUpdate(t.id, { isApproved: true });
-    });
-  };
+    // Filter accounts based on search term
+    const filteredAccounts = useMemo(() => {
+      if (!searchTerm) return accounts;
+      return accounts.filter(account => 
+        account.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        account.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }, [searchTerm, accounts]);
 
-  const getConfidenceDisplay = (confidence: number) => {
-    if (confidence >= 90) return { label: 'High', color: 'text-slate-700' };
-    if (confidence >= 70) return { label: 'Medium', color: 'text-slate-500' };
-    return { label: 'Low', color: 'text-slate-400' };
-  };
-
-  const stats = useMemo(() => {
-    const total = transactions.length;
-    const needsReview = transactions.filter(t => (t.confidence ?? 0) < 80 || !t.accountCode).length;
-    const highConfidence = transactions.filter(t => (t.confidence ?? 0) >= 80 && t.accountCode).length;
-    const approved = transactions.filter(t => t.isApproved).length;
-    const readyToApprove = transactions.filter(t => (t.confidence ?? 0) >= 90 && t.accountCode && !t.isApproved).length;
-    
-    // AI Performance Stats
-    const aiCategorized = transactions.filter(t => t.confidence !== undefined && t.confidence > 0).length;
-    const aiSuccessRate = total > 0 ? Math.round((aiCategorized / total) * 100) : 0;
-    const avgConfidence = aiCategorized > 0 ? 
-      Math.round(transactions.filter(t => t.confidence !== undefined && t.confidence > 0)
-        .reduce((sum, t) => sum + (t.confidence || 0), 0) / aiCategorized) : 0;
-    
-    // Calculate inflow vs outflow
-    const inflow = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
-    const outflow = transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
-    
-    return { total, needsReview, highConfidence, approved, readyToApprove, inflow, outflow, aiCategorized, aiSuccessRate, avgConfidence };
-  }, [transactions]);
-
-  // Auto-assignment logic removed - using account codes only
-
-  // Auto-trigger AI categorization for low confidence transactions
-  useEffect(() => {
-    if (!aiEngine || !chartOfAccounts) return;
-    
-    const lowConfidenceTransactions = transactions.filter(t => 
-      (t.confidence ?? 0) < 50 && !t.accountCode && !t.isApproved
-    );
-    
-    if (lowConfidenceTransactions.length > 0) {
-      console.log(`🤖 Auto-triggering AI categorization for ${lowConfidenceTransactions.length} low confidence transactions`);
-      
-      // Process them in batches to avoid overwhelming the API
-      const processBatch = async (batch: Transaction[]) => {
-        for (const transaction of batch) {
-          try {
-            const result = aiEngine.categorizeTransaction(transaction);
-            if (result && result.confidence > 50) {
-              handleAICategorize(transaction.id, result.accountCode, result.confidence);
-              // Small delay between requests
-              await new Promise(resolve => setTimeout(resolve, 100));
-            }
-          } catch (error) {
-            console.error(`❌ Auto-categorization failed for transaction ${transaction.id}:`, error);
-          }
+    // Close dropdown when clicking outside
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+          setIsOpen(false);
+          setSearchTerm('');
         }
       };
-      
-      // Process in batches of 5
-      const batchSize = 5;
-      for (let i = 0; i < lowConfidenceTransactions.length; i += batchSize) {
-        const batch = lowConfidenceTransactions.slice(i, i + batchSize);
-        processBatch(batch);
+
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Handle keyboard navigation
+    useEffect(() => {
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (!isOpen) return;
+
+        switch (event.key) {
+          case 'ArrowDown':
+            event.preventDefault();
+            setHighlightedIndex(prev => 
+              prev < filteredAccounts.length - 1 ? prev + 1 : 0
+            );
+            break;
+          case 'ArrowUp':
+            event.preventDefault();
+            setHighlightedIndex(prev => 
+              prev > 0 ? prev - 1 : filteredAccounts.length - 1
+            );
+            break;
+          case 'Enter':
+            event.preventDefault();
+            if (filteredAccounts[highlightedIndex]) {
+              handleSelect(filteredAccounts[highlightedIndex].code);
+            }
+            break;
+          case 'Escape':
+            setIsOpen(false);
+            setSearchTerm('');
+            break;
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, highlightedIndex, filteredAccounts]);
+
+    // Reset highlighted index when search changes
+    useEffect(() => {
+      setHighlightedIndex(0);
+    }, [searchTerm]);
+
+    const handleSelect = (accountCode: string) => {
+      onSelect(accountCode);
+      setIsOpen(false);
+      setSearchTerm('');
+      setHighlightedIndex(0);
+    };
+
+    const handleInputClick = () => {
+      setIsOpen(true);
+      if (inputRef.current) {
+        inputRef.current.focus();
       }
-    }
-  }, [transactions, aiEngine, chartOfAccounts]);
+    };
 
-  // Defensive: Ensure all transactions have valid account codes
-  useEffect(() => {
-    if (!Array.isArray(transactions) || !accountCodes) return;
-    let foundInvalid = false;
-    transactions.forEach((txn) => {
-      if (txn.accountCode && !accountCodes.includes(txn.accountCode)) {
-        foundInvalid = true;
-        // Auto-fix: set to blank
-        onTransactionUpdate(txn.id, { accountCode: '' });
-      }
-    });
-    if (foundInvalid) {
-      setNotification('Some transactions had invalid account codes and were reset. Please review.');
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, accountCodes]);
+    const selectedAccount = accounts.find(acc => acc.code === currentValue);
 
-  // Component mounted successfully
+    return (
+      <div className="relative" ref={dropdownRef}>
+        <div
+          className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm focus-within:ring-2 focus-within:ring-slate-500 focus-within:border-slate-500 cursor-pointer"
+          onClick={handleInputClick}
+        >
+          {isOpen ? (
+            <input
+              ref={inputRef}
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search accounts..."
+              className="w-full outline-none bg-transparent"
+              autoFocus
+            />
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className={selectedAccount ? "text-slate-900" : "text-slate-500"}>
+                {selectedAccount ? `${selectedAccount.code} - ${selectedAccount.name}` : placeholder}
+              </span>
+              <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          )}
+        </div>
 
-  useEffect(() => {
-    // TransactionTable updated
-  }, [filteredTransactions]);
+        {isOpen && (
+          <div 
+            className="absolute z-50 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+            style={{ minWidth: '300px' }}
+          >
+            {filteredAccounts.length > 0 ? (
+              filteredAccounts.map((account, index) => (
+                <div
+                  key={account.code}
+                  className={`px-3 py-2 cursor-pointer text-sm transition-colors ${
+                    index === highlightedIndex 
+                      ? 'bg-slate-100 text-slate-900' 
+                      : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                  onClick={() => handleSelect(account.code)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                >
+                  <div className="font-medium">{account.code} - {account.name}</div>
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-2 text-sm text-slate-500">
+                No accounts found for "{searchTerm}"
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
-  if (!chartOfAccounts) {
+  if (!chartOfAccounts || isLoadingAccounts) {
     return (
       <div className="flex items-center justify-center min-h-[200px] text-lg text-purple-600 font-semibold">
-        Loading chart of accounts...
+        Loading chart of accounts for {province}...
       </div>
     );
   }
 
   if (filteredTransactions.length === 0) {
     return (
-      <div className="p-8 text-center text-lg text-red-500 bg-red-50 border border-red-200 rounded-lg">
-        [DEBUG] No transactions to display. Table not rendered.
+      <div className="w-full max-w-none space-y-6">
+        {/* Statistics Dashboard - Show even when empty */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="text-2xl font-bold text-slate-900">{stats.total}</div>
+            <div className="text-sm text-slate-500">Total Transactions</div>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="text-2xl font-bold text-blue-600">{stats.needsReview}</div>
+            <div className="text-sm text-slate-500">Needs Review</div>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="text-2xl font-bold text-green-600">{stats.highConfidence}</div>
+            <div className="text-sm text-slate-500">High Confidence</div>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="text-2xl font-bold text-purple-600">{stats.approved}</div>
+            <div className="text-sm text-slate-500">Approved</div>
+          </div>
+        </div>
+
+        {/* Filter Controls - Show even when empty */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder="Search transactions..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+              />
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as any)}
+                className="px-4 py-3 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+              >
+                <option value="all">All Transactions</option>
+                <option value="needs-review">Needs Review</option>
+                <option value="high-confidence">High Confidence</option>
+              </select>
+              <button
+                onClick={() => setShowSmartSelect(!showSmartSelect)}
+                className="px-4 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium"
+              >
+                Smart Select
+              </button>
+              
+              {/* View Mode Toggle */}
+              <div className="flex border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`px-4 py-3 text-sm font-medium transition-colors ${
+                    viewMode === 'table' 
+                      ? 'bg-slate-900 text-white' 
+                      : 'bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  Table View
+                </button>
+                <button
+                  onClick={() => setViewMode('grouped')}
+                  className={`px-4 py-3 text-sm font-medium transition-colors ${
+                    viewMode === 'grouped' 
+                      ? 'bg-slate-900 text-white' 
+                      : 'bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  Grouped View
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Smart Select Options */}
+          {showSmartSelect && (
+            <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => handleSmartSelect('uncategorized')}
+                  className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors"
+                >
+                  Uncategorized
+                </button>
+                <button
+                  onClick={() => handleSmartSelect('low-confidence')}
+                  className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-sm hover:bg-yellow-200 transition-colors"
+                >
+                  Low Confidence
+                </button>
+                <button
+                  onClick={() => handleSmartSelect('high-confidence')}
+                  className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200 transition-colors"
+                >
+                  High Confidence
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Empty State Message */}
+        <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm text-center">
+          <div className="text-slate-400 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-semibold text-slate-700 mb-2">
+            {searchTerm ? 'No matching transactions found' : 'No transactions to display'}
+          </h3>
+          <p className="text-slate-500 mb-4">
+            {searchTerm ? (
+              <>
+                Try adjusting your search term "<strong>{searchTerm}</strong>" or changing your filter settings.
+              </>
+            ) : (
+              'Upload a CSV file to get started with transaction categorization.'
+            )}
+          </p>
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+            >
+              Clear Search
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -798,883 +805,594 @@ function TransactionTable({ transactions, onTransactionUpdate, aiEngine, provinc
           </div>
         </div>
       )}
-      {/* Stats and Filters */}
-      <div className="bg-white rounded-xl p-8 border border-purple-100/50 shadow-lg shadow-purple-500/5">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-4">
-            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                              <AppIcons.financial.chart className="w-4 h-4 text-purple-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-slate-900">
-              Transaction Review & Coding
-          </h3>
+
+      {/* Statistics Dashboard */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+          <div className="text-2xl font-bold text-slate-900">{stats.total}</div>
+          <div className="text-sm text-slate-500">Total Transactions</div>
         </div>
-          <div className="flex items-center space-x-6 text-sm">
-            <span className="text-slate-600">
-              {stats.approved}/{stats.total} approved
-            </span>
-            <span className="text-slate-500">
-              {stats.needsReview} need review
-            </span>
-            <span className="text-slate-700">
-              {stats.highConfidence} ready
-            </span>
-            {/* AI Performance Indicator */}
-            {stats.aiCategorized > 0 && (
-              <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 rounded-lg">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-blue-700 font-medium">
-                  AI: {stats.aiSuccessRate}% ({stats.avgConfidence}% avg)
-                </span>
-              </div>
-            )}
-            <div className="flex items-center space-x-4">
-              <span className="text-green-600 font-medium">
-                ↗ ${stats.inflow.toFixed(2)} inflow
-              </span>
-              <span className="text-red-600 font-medium">
-                ↘ ${stats.outflow.toFixed(2)} outflow
-              </span>
-            </div>
-            {stats.readyToApprove > 0 && (
-              <button
-                onClick={handleAutoApproveHighConfidence}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 hover:scale-105 transition-all duration-300 shadow-lg shadow-purple-500/25"
-              >
-                Auto-approve {stats.readyToApprove}
-              </button>
-            )}
-          </div>
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+          <div className="text-2xl font-bold text-blue-600">{stats.needsReview}</div>
+          <div className="text-sm text-slate-500">Needs Review</div>
         </div>
-
-        {/* Filters */}
-        <div className="flex items-center space-x-6 mb-6">
-          <div className="flex space-x-3">
-            {[
-              { key: 'all', label: 'All Transactions' },
-              { key: 'needs-review', label: 'Needs Review' },
-              { key: 'high-confidence', label: 'Ready to Approve' }
-            ].map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setFilter(key as any)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
-                  filter === key
-                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
-                    : 'bg-slate-50 text-slate-600 hover:bg-purple-50 hover:text-purple-600 border border-transparent hover:border-purple-200'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex-1 max-w-sm">
-              <input
-                type="text"
-                placeholder="Search transactions..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 bg-white rounded-lg text-sm text-black border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-300"
-              />
-            </div>
-          </div>
-
-        {/* Smart Selection */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowSmartSelect(!showSmartSelect)}
-              className="px-4 py-2 bg-white text-slate-600 rounded-lg text-sm font-medium hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200 transition-all duration-300 border border-slate-200"
-            >
-                              <AppIcons.actions.target className="w-4 h-4 mr-1" />
-                Smart Select
-            </button>
-            {showSmartSelect && (
-              <div className="flex items-center space-x-2">
-            <select
-                  onChange={(e) => {
-                    if (e.target.value) handleSmartSelect(e.target.value);
-                  }}
-                  className="px-3 py-2 bg-slate-50 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-300"
-                  defaultValue=""
-                >
-                  <option value="">Choose criteria...</option>
-                  <option value="uncategorized">Uncategorized</option>
-                  <option value="low-confidence">Low Confidence (&lt;70%)</option>
-                  <option value="high-confidence">High Confidence (≥90%)</option>
-                  <option value="no-account">Missing Account</option>
-                  <option value="unapproved">Unapproved</option>
-                  <option value="large-amounts">Large Amounts (&gt;$100)</option>
-                  <option value="small-amounts">Small Amounts (≤$50)</option>
-                  <option value="this-month">This Month</option>
-            </select>
-                <button
-                  onClick={() => setShowSmartSelect(false)}
-                  className="px-2 py-2 text-slate-400 hover:text-slate-600 text-sm"
-                >
-                  ×
-                </button>
-          </div>
-            )}
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+          <div className="text-2xl font-bold text-green-600">{stats.highConfidence}</div>
+          <div className="text-sm text-slate-500">High Confidence</div>
+        </div>
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+          <div className="text-2xl font-bold text-purple-600">{stats.approved}</div>
+          <div className="text-sm text-slate-500">Approved</div>
         </div>
       </div>
 
-        {/* Bulk Actions */}
+      {/* Filter Controls */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Search transactions..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex gap-2">
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as any)}
+              className="px-4 py-3 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+            >
+              <option value="all">All Transactions</option>
+              <option value="needs-review">Needs Review</option>
+              <option value="high-confidence">High Confidence</option>
+            </select>
+            <button
+              onClick={() => setShowSmartSelect(!showSmartSelect)}
+              className="px-4 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium"
+            >
+              Smart Select
+            </button>
+            
+            {/* View Mode Toggle */}
+            <div className="flex border border-slate-200 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-4 py-3 text-sm font-medium transition-colors ${
+                  viewMode === 'table' 
+                    ? 'bg-slate-900 text-white' 
+                    : 'bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                Table View
+              </button>
+              <button
+                onClick={() => setViewMode('grouped')}
+                className={`px-4 py-3 text-sm font-medium transition-colors ${
+                  viewMode === 'grouped' 
+                    ? 'bg-slate-900 text-white' 
+                    : 'bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                Grouped View
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Smart Select Options */}
+        {showSmartSelect && (
+          <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleSmartSelect('uncategorized')}
+                className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors"
+              >
+                Uncategorized
+              </button>
+              <button
+                onClick={() => handleSmartSelect('low-confidence')}
+                className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-sm hover:bg-yellow-200 transition-colors"
+              >
+                Low Confidence
+              </button>
+              <button
+                onClick={() => handleSmartSelect('high-confidence')}
+                className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200 transition-colors"
+              >
+                High Confidence
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bulk Actions */}
       {showBulkActions && (
-          <div className="bg-white rounded-xl p-6 mb-6 border-l-4 border-purple-500 shadow-lg shadow-purple-500/10">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-3">
-                <AppIcons.actions.ai className="w-5 h-5" />
-                <div>
-                  <span className="text-sm font-medium text-slate-900">
-                    {selectedTransactions.size} transactions selected
-            </span>
-                  <div className="text-xs text-slate-500">
-                    Bulk operations will apply to all selected transactions
-                  </div>
+        <div className="bg-purple-50 p-6 rounded-2xl border border-purple-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div>
+                <span className="text-sm font-medium text-slate-900">
+                  {selectedTransactions.size} transactions selected
+                </span>
+                <div className="text-xs text-slate-500">
+                  Bulk operations will apply to all selected transactions
                 </div>
               </div>
+            </div>
+            <button
+              onClick={() => {
+                setSelectedTransactions(new Set());
+                setShowBulkActions(false);
+              }}
+              className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs hover:bg-slate-200 transition-colors"
+            >
+              Clear Selection
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
               <button
-                onClick={() => {
-                  setSelectedTransactions(new Set());
-                  setShowBulkActions(false);
-                }}
-                className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs hover:bg-slate-200 transition-colors"
+                onClick={handleBulkApprove}
+                className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 hover:scale-105 transition-all duration-300 font-medium shadow-lg shadow-purple-500/25"
               >
-                Clear Selection
+                Approve All Selected
               </button>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Quick Category Actions */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Quick Categories
-                </label>
-                <div className="space-y-2">
-                                      <select
-                    onChange={(e) => {
-                      const [accountCode] = e.target.value.split('|');
-                      if (accountCode) handleBulkUpdate([{ id: '', accountCode }]);
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-300"
-                    defaultValue=""
-                  >
-                    <option value="">Select account...</option>
-                    {accounts.map(account => (
-                      <option key={account.code} value={`${account.code}|${account.name}`}>
-                        {account.code} - {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Bulk Actions */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Actions
-                </label>
-                <div className="space-y-2">
-                  <button
-                    onClick={handleBulkAICategorize}
-                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 hover:scale-105 transition-all duration-300 font-medium shadow-lg shadow-blue-500/25"
-                  >
-                    <AppIcons.actions.ai className="w-4 h-4 mr-1" />
-                    AI Categorize Selected
-                  </button>
-                  <button
-                    onClick={handleBulkApprove}
-                    className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 hover:scale-105 transition-all duration-300 font-medium shadow-lg shadow-purple-500/25"
-                  >
-                    <AppIcons.status.approved className="w-4 h-4 mr-1" />
-                Approve All Selected
-                  </button>
-                  <button
-                    onClick={() => {
-                      const updates = { isManuallyEdited: true, confidence: 95 };
-                      selectedTransactions.forEach(id => {
-                        onTransactionUpdate(id, updates);
-                      });
-                      setSelectedTransactions(new Set());
-                      setShowBulkActions(false);
-                    }}
-                    className="w-full px-4 py-2 bg-slate-600 text-white rounded-lg text-sm hover:bg-slate-700 hover:scale-105 transition-all duration-300 font-medium shadow-lg shadow-slate-500/25"
-                  >
-                    <AppIcons.actions.edit className="w-4 h-4 mr-1" />
-                Mark as Manually Reviewed
-                  </button>
-                  <select
-                    onChange={(e) => {
-                      const [accountCode] = e.target.value.split('|');
-                      if (accountCode) {
-                        const updates = Array.from(selectedTransactions).map(id => ({ id, accountCode }));
-                        handleBulkUpdate(updates);
-                        setNotification(`Assigned ${accountCode} to ${updates.length} transactions`);
-                        setSelectedTransactions(new Set());
-                        setShowBulkActions(false);
-                      }
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-300"
-                    defaultValue=""
-                  >
-                    <option value="">Bulk Account Assignment...</option>
-                    {accounts.map(account => (
-                      <option key={account.code} value={`${account.code}|${account.name}`}>
-                        {account.code} - {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+            <div>
+              <SearchableAccountDropdown
+                currentValue=""
+                onSelect={(accountCode) => {
+                  if (accountCode) {
+                    const updates = Array.from(selectedTransactions).map(id => ({ id, accountCode }));
+                    handleBulkUpdate(updates);
+                    setSelectedTransactions(new Set());
+                    setShowBulkActions(false);
+                  }
+                }}
+                placeholder="Bulk Account Assignment..."
+              />
             </div>
           </div>
-        )}
         </div>
+      )}
 
-      {/* View Toggle */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          <span className="text-sm font-medium text-slate-700">View:</span>
-          <div className="flex items-center bg-slate-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
-                viewMode === 'table'
-                  ? 'bg-white text-purple-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <AppIcons.financial.chart className="w-4 h-4 mr-1" />
-              Table View
-            </button>
-            <button
-              onClick={() => setViewMode('grouped')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
-                viewMode === 'grouped'
-                  ? 'bg-white text-purple-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <AppIcons.categories.folder className="w-4 h-4 mr-1" />
-              Grouped by Account
-            </button>
-          </div>
-        </div>
-        {viewMode === 'grouped' && (
-          <div className="flex items-center space-x-2 text-sm text-slate-500">
-            <button
-              onClick={() => setExpandedGroups(new Set(Object.keys(groupedTransactions)))}
-              className="px-2 py-1 text-xs bg-slate-100 rounded hover:bg-slate-200 transition-colors"
-            >
-              Expand All
-            </button>
-            <button
-              onClick={() => setExpandedGroups(new Set())}
-              className="px-2 py-1 text-xs bg-slate-100 rounded hover:bg-slate-200 transition-colors"
-            >
-              Collapse All
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Transaction Table */}
-      <div className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
-        {viewMode === 'table' ? (
+      {/* Transaction Display */}
+      {viewMode === 'table' ? (
+        /* Table View */
+        <div className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
           <div className="overflow-x-auto min-w-full">
-          <table className="w-full min-w-[1400px] divide-y divide-slate-100">
-            <thead className="bg-gradient-to-r from-slate-25 to-slate-50">
-              <tr>
-                <th className="w-12 px-6 py-5 text-left">
-                  <input
-                    type="checkbox"
-                    checked={selectedTransactions.size === filteredTransactions.length && filteredTransactions.length > 0}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-slate-600 focus:ring-slate-500 focus:ring-offset-0"
-                  />
-                </th>
-                <th className="w-24 px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide">
-                  <SortableHeader field="date">Date</SortableHeader>
-                </th>
-                <th className="w-80 px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide">
-                  <SortableHeader field="description">Description</SortableHeader>
-                </th>
-                <th className="w-32 px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide">
-                  <SortableHeader field="amount">
-                    <div className="flex items-center space-x-2">
-                      <span>Amount</span>
-                      <div className="flex items-center space-x-1">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                        <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                      </div>
-                    </div>
-                  </SortableHeader>
-                </th>
-                
-                <th className="w-64 px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide">
-                  <SortableHeader field="account">Account</SortableHeader>
-                </th>
-                <th className="w-24 px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide">
-                  <SortableHeader field="taxRate">Tax</SortableHeader>
-                </th>
-                <th className="w-28 px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide">
-                  <SortableHeader field="confidence">AI Score</SortableHeader>
-                </th>
-                <th className="w-32 px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide">
-                  <SortableHeader field="status">Status</SortableHeader>
-                </th>
-                <th className="w-32 px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide">
-                  <SortableHeader field="feedback">Feedback</SortableHeader>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white">
-              {/* DEBUG: Table Rendered */}
-              <tr>
-                <td colSpan={8} className="px-6 py-2 text-center text-xs text-blue-400 bg-blue-50">
-                  Transaction Table loaded with {filteredTransactions.length} transactions
-                </td>
-              </tr>
-              {filteredTransactions.length === 0 ? (
+            <table className="w-full min-w-[1400px] divide-y divide-slate-100">
+              <thead className="bg-gradient-to-r from-slate-25 to-slate-50">
                 <tr>
-                  <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
-                    No transactions found matching the current filters.
-                  </td>
+                  <th className="w-12 px-6 py-5 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedTransactions.size === filteredTransactions.length && filteredTransactions.length > 0}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-slate-600 focus:ring-slate-500 focus:ring-offset-0"
+                    />
+                  </th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
+                    Date
+                  </th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
+                    Description
+                  </th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
+                    Amount
+                  </th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
+                    Account
+                  </th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
+                    Tax Rate
+                  </th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
+                    AI Score
+                  </th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
+                    Status
+                  </th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
+                    Actions
+                  </th>
                 </tr>
-              ) : (
-                <>
-                  {filteredTransactions.map((transaction, index) => {
-                    // Defensive: skip rows with missing required fields
-                    if (!transaction || !transaction.id || transaction.amount === undefined || transaction.description === undefined) {
-                      console.warn('Skipping transaction with missing required fields:', transaction);
-                      return null;
-                    }
-                    try {
-                      // Special styling for E-Transfer and Bill Payment transactions
-                      const isETransfer = transaction.description.toLowerCase().includes('e-transfer') || 
-                                        transaction.description.toLowerCase().includes('e-tfr');
-                      const isBillPayment = transaction.description.toLowerCase().includes('bill payment') ||
-                                          transaction.description.toLowerCase().includes('bill pay');
-                      
-                      const rowClass = isBillPayment ? 'bg-green-50/40' : 
-                                      'hover:bg-slate-50/50';
-                      
-                      return (
-                        <tr key={transaction.id} className={`${rowClass} border-b border-slate-50 transition-all duration-200 hover:bg-slate-25`}>
-                      <td className="px-6 py-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedTransactions.has(transaction.id)}
-                          onChange={(e) => handleSelectTransaction(transaction.id, e.target.checked)}
-                          className="w-4 h-4 rounded border-slate-300 text-slate-600 focus:ring-slate-500 focus:ring-offset-0"
+              </thead>
+              <tbody className="bg-white">
+                {filteredTransactions.map((transaction) => (
+                  <tr 
+                    key={transaction.id} 
+                    className={`border-b border-slate-200 hover:bg-slate-50 transition-colors ${
+                      selectedTransactions.has(transaction.id) ? 'bg-purple-50 border-purple-200' : ''
+                    }`}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedTransactions.has(transaction.id)}
+                        onChange={(e) => {
+                          const newSelected = new Set(selectedTransactions);
+                          if (e.target.checked) {
+                            newSelected.add(transaction.id);
+                          } else {
+                            newSelected.delete(transaction.id);
+                          }
+                          setSelectedTransactions(newSelected);
+                          setShowBulkActions(newSelected.size > 0);
+                        }}
+                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
+                      {new Date(transaction.date).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-900 max-w-xs">
+                      <div className="truncate" title={transaction.description}>
+                        {transaction.description}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className={`font-semibold ${
+                        transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        ${Math.abs(transaction.amount).toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      {!transaction.accountCode ? (
+                        <SearchableAccountDropdown
+                          currentValue=""
+                          onSelect={(accountCode) => handleAccountChange(transaction.id, accountCode)}
+                          placeholder="Select account..."
                         />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-mono">
-                        {new Date(transaction.date).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric', 
-                          year: 'numeric' 
-                        })}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-900">
-                        <div className="font-medium text-slate-900 truncate" title={transaction.description}>
-                          {transaction.description}
-                        </div>
-                        {transaction.merchant && (
-                          <div className="text-xs text-slate-500 truncate mt-0.5">
-                            {transaction.merchant}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <div className="text-right">
-                          <div className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium ${
-                            transaction.amount >= 0 
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                              : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}>
-                            {transaction.amount >= 0 ? '+' : ''}${Math.abs(transaction.amount).toFixed(2)}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm"> 
-  {editingId === transaction.id && editingField === 'account' ? (
-    <select
-      autoFocus
-      className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
-      value={transaction.accountCode || ''}
-      onChange={e => handleAccountChange(transaction.id, e.target.value)}
-      onBlur={() => { setEditingId(null); setEditingField(null); }}
-    >
-      <option value="">Select account...</option>
-      {accounts.map(account => (
-        <option key={account.code} value={account.code}>
-          {account.code} - {account.name}
-        </option>
-      ))}
-    </select>
-  ) : (transaction.description.toLowerCase().includes('e-transfer') || transaction.description.toLowerCase().includes('cheque')) && (!transaction.accountCode || getAccountName(transaction.accountCode) === 'Uncategorized') ? (
-    <button
-      className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
-      onClick={() => { setEditingId(transaction.id); setEditingField('account'); }}
-    >
-      <AppIcons.status.warning className="w-3 h-3 mr-1" />
-      Manual Entry
-    </button>
-  ) : getAccountName(transaction.accountCode) === 'Uncategorized' ? (
-    <button
-      className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 transition-colors"
-      onClick={() => { setEditingId(transaction.id); setEditingField('account'); }}
-    >
-      Uncategorized
-    </button>
-  ) : (
-    <div className="flex items-center space-x-2">
-      <div className="flex flex-col">
-        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
-          {getAccountName(transaction.accountCode)}
-        </span>
-        <span className="text-xs text-slate-400 mt-1">
-          Code: {transaction.accountCode}
-        </span>
-      </div>
-      <button
-        onClick={() => { setEditingId(transaction.id); setEditingField('account'); }}
-        className="text-slate-400 hover:text-slate-600 transition-colors"
-        title="Edit account"
-      >
-        <AppIcons.actions.edit className="w-3 h-3" />
-      </button>
-    </div>
-  )}
-</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {(() => {
-                          const taxRate = getTaxRate(transaction);
-                          return (
-                            <span className="text-xs text-slate-500">
-                              {taxRate !== undefined ? `${taxRate}%` : '—'}
-                            </span>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {transaction.confidence !== undefined && 
-                         transaction.accountCode && 
-                         transaction.accountCode !== '' && 
-                         transaction.accountCode !== 'uncategorized' &&
-                         getAccountName(transaction.accountCode) !== 'Uncategorized' && (
-                          <div className="flex items-center space-x-1">
-                            <div className={`w-2 h-2 rounded-full ${
-                              (transaction.confidence ?? 0) >= 90 
-                                ? 'bg-emerald-500' 
-                                : (transaction.confidence ?? 0) >= 70 
-                                ? 'bg-amber-500'
-                                : 'bg-rose-500'
-                            }`}></div>
-                            <span className="text-xs text-slate-500">
-                              {transaction.confidence ?? 0}%
-                            </span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      ) : (
                         <div className="flex items-center space-x-2">
-                          {/* AI Categorization Button */}
-                          {!transaction.isApproved && (
-                            <AICategorizationButton
-                              transaction={transaction}
-                              onCategorize={(accountCode, confidence) => handleAICategorize(transaction.id, accountCode, confidence)}
-                              province={province}
-                              onKeywordAdded={(keyword, accountCode) => {
-                                setNotification(`Added keyword "${keyword}" for account ${accountCode}`);
-                              }}
-                            />
-                          )}
-                          
-                          {/* Approval Button */}
-                          {!transaction.isApproved && (
-                            <button
-                              onClick={() => handleApprove(transaction.id)}
-                              disabled={!transaction.accountCode}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                transaction.accountCode
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                                  : 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed'
-                              }`}
-                              title={transaction.accountCode ? 'Approve this transaction' : 'Set account first'}
-                            >
-                              {!transaction.accountCode ? 'Set Account' : 'Approve'}
-                            </button>
-                          )}
-                          {transaction.isApproved && (
-                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-emerald-100 text-emerald-700">
-                              <AppIcons.status.approved className="w-3 h-3 mr-1" />
-                              Approved
-                            </span>
-                          )}
+                          <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
+                            {getAccountName(transaction.accountCode)}
+                          </span>
+                          <button
+                            onClick={() => handleAccountChange(transaction.id, '')}
+                            className="text-slate-400 hover:text-slate-600 transition-colors text-xs"
+                            title="Clear account"
+                          >
+                            ×
+                          </button>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {transaction.accountCode && !transaction.feedback && (
-                          <div className="flex items-center space-x-1">
-                            <button
-                              onClick={() => handleFeedback(transaction.id, true)}
-                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                              title="Correct"
-                            >
-                              <AppIcons.feedback.thumbsUp className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => handleFeedback(transaction.id, false)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
-                              title="Incorrect"
-                            >
-                              <AppIcons.feedback.thumbsDown className="w-3 h-3" />
-                            </button>
-                          </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {getTaxRate(transaction.accountCode) !== undefined ? (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {getTaxRate(transaction.accountCode)}%
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {transaction.confidence ? (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          transaction.confidence >= 90 ? 'bg-green-100 text-green-800' :
+                          transaction.confidence >= 70 ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {transaction.confidence}%
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {transaction.isApproved ? (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Approved
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="flex items-center space-x-2">
+                        {/* Manual AI Button */}
+                        <AICategorizationButton
+                          transaction={transaction}
+                          onCategorize={(accountCode, confidence) => 
+                            handleIndividualAICategorize(transaction.id, accountCode, confidence)
+                          }
+                          province={province}
+                          disabled={false}
+                        />
+                        
+                        {/* Approve/Unapprove Button */}
+                        {transaction.isApproved ? (
+                          <button
+                            onClick={() => handleIndividualUnapprove(transaction.id)}
+                            className="p-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                            title="Remove approval"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleIndividualApprove(transaction.id)}
+                            className="p-1.5 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
+                            title="Approve transaction"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </button>
                         )}
-                        {transaction.feedback && (
-                          <div className="flex items-center space-x-1">
-                            <div className={`w-2 h-2 rounded-full ${
-                              transaction.feedback.isCorrect ? 'bg-emerald-500' : 'bg-rose-500'
-                            }`}></div>
-                            <span className="text-xs text-slate-500">
-                              {transaction.feedback.isCorrect ? 'Correct' : 'Fixed'}
-                            </span>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                } catch (error) {
-                  console.error('Error rendering transaction row:', error, transaction);
-                  return (
-                    <tr key={`error-${index}`} className="bg-red-50 border-b">
-                      <td colSpan={8} className="px-6 py-4 text-center text-red-600">
-                        Error rendering transaction: {transaction?.description || 'Unknown'}
-                      </td>
-                    </tr>
-                  );
-                }
-              })}
-                  {/* Fallback message if no rows were rendered */}
-                  {filteredTransactions.length > 0 && filteredTransactions.every(t => 
-                    !t || !t.id || t.amount === undefined || t.description === undefined
-                  ) && (
-                    <tr>
-                      <td colSpan={8} className="px-6 py-4 text-center text-red-600 bg-red-50">
-                        ⚠️ All transactions have missing required fields. Check console for details.
-                      </td>
-                    </tr>
-                  )}
-                  {/* FINAL FORCED FALLBACK ROW */}
-                  <tr>
-                    <td colSpan={8} className="px-6 py-2 text-center text-xs text-purple-400 bg-purple-50">
-                      [DEBUG] End of TransactionTable body. If you see only this row, no transactions were rendered.
+                      </div>
                     </td>
                   </tr>
-                </>
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        ) : (
-          /* Grouped View */
-          <div className="p-6">
-            {Object.keys(groupedTransactions).length === 0 ? (
-              <div className="text-center py-16 text-slate-500">
-                No transactions match the current filter.
+      ) : (
+        /* Grouped View */
+        <div className="space-y-4">
+          {Object.entries(groupedTransactions).map(([accountCode, groupTransactions]) => (
+            <div key={accountCode} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-slate-50 to-slate-25 px-6 py-4 border-b border-slate-100 cursor-pointer"
+                onClick={() => toggleGroup(accountCode)}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      {getAccountName(accountCode)} ({accountCode || 'None'})
+                    </h3>
+                    <p className="text-sm text-slate-600">
+                      {groupTransactions.length} transactions • Total: $
+                      {Math.abs(groupTransactions.reduce((sum, t) => sum + t.amount, 0)).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="text-slate-600">
+                    {expandedGroups.has(accountCode) ? '▼' : '▶'}
+                  </div>
+                </div>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {Object.entries(groupedTransactions)
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([accountCode, groupTransactions]) => {
-                    const isExpanded = expandedGroups.has(accountCode);
-                    const groupTotal = groupTransactions.reduce((sum, t) => sum + t.amount, 0);
-                    const accountName = getAccountName(accountCode);
-                    
-                    return (
-                      <div key={accountCode} className="border border-slate-200 rounded-lg overflow-hidden">
-                        {/* Group Header */}
-                        <div 
-                          className="flex items-center justify-between p-4 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors"
-                          onClick={() => toggleGroup(accountCode)}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <span className="text-slate-400 transition-transform duration-200" style={{
-                              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)'
-                            }}>
-                              ▶
-                            </span>
-                            <div className="flex items-center space-x-3">
-                              <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-purple-600 to-blue-600 text-white text-lg font-bold rounded-xl shadow-lg">
-                                {accountCode}
-                              </div>
-                              <div>
-                                <h3 className="font-bold text-slate-900 text-lg">
-                                  Account {accountCode}
-                                </h3>
-                                <p className="text-sm text-slate-600 font-medium">
-                                  {accountName}
-                                </p>
-                                <p className="text-xs text-slate-500">
-                                  {groupTransactions.length} transaction{groupTransactions.length !== 1 ? 's' : ''}
-                                </p>
-                              </div>
+              
+              {expandedGroups.has(accountCode) && (
+                <div className="p-6">
+                  <div className="space-y-3">
+                    {groupTransactions.map((transaction) => (
+                      <div 
+                        key={transaction.id}
+                        className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${
+                          selectedTransactions.has(transaction.id) 
+                            ? 'bg-purple-50 border-purple-200' 
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedTransactions.has(transaction.id)}
+                            onChange={(e) => {
+                              const newSelected = new Set(selectedTransactions);
+                              if (e.target.checked) {
+                                newSelected.add(transaction.id);
+                              } else {
+                                newSelected.delete(transaction.id);
+                              }
+                              setSelectedTransactions(newSelected);
+                              setShowBulkActions(newSelected.size > 0);
+                            }}
+                            className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium text-slate-900 truncate">
+                              {transaction.description}
                             </div>
-                          </div>
-                          <div className="flex items-center space-x-4">
-                            <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                              groupTotal >= 0 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {groupTotal >= 0 ? '+' : ''}${groupTotal.toFixed(2)}
+                            <div className="text-xs text-slate-500">
+                              {new Date(transaction.date).toLocaleDateString()}
                             </div>
                           </div>
                         </div>
                         
-                        {/* Group Content */}
-                        {isExpanded && (
-                          <div className="p-4 bg-white">
-                            <div className="grid gap-3">
-                              {groupTransactions.map((transaction) => {
-                                const isETransfer = transaction.description.toLowerCase().includes('e-transfer') || 
-                                                  transaction.description.toLowerCase().includes('e-tfr');
-                                const isBillPayment = transaction.description.toLowerCase().includes('bill payment') ||
-                                                    transaction.description.toLowerCase().includes('bill pay');
-                                
-                                return (
-                                  <div 
-                                    key={transaction.id} 
-                                    className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
-                                  >
-                                    <div className="flex items-center space-x-3 flex-1">
-                                      <input
-                                        type="checkbox"
-                                        checked={selectedTransactions.has(transaction.id)}
-                                        onChange={(e) => handleSelectTransaction(transaction.id, e.target.checked)}
-                                        className="rounded text-purple-600 focus:ring-purple-500 border-slate-300"
-                                      />
-                                      <div className="flex-1">
-                                        <div className="font-medium text-slate-900 text-sm">
-                                          {transaction.description}
-                                        </div>
-                                        <div className="text-xs text-slate-500">
-                                          {transaction.date}
-                                          {transaction.merchant && ` • ${transaction.merchant}`}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center space-x-3">
-                                      {/* Account Section */}
-                                      <div className="w-64 px-3 py-2">
-                                        {editingId === transaction.id && editingField === 'account' ? (
-                                          <select
-                                            value={transaction.accountCode || ''}
-                                            onChange={(e) => {
-                                              handleAccountChange(transaction.id, e.target.value);
-                                              setEditingId(null);
-                                              setEditingField(null);
-                                            }}
-                                            onBlur={() => {
-                                              setEditingId(null);
-                                              setEditingField(null);
-                                            }}
-                                            className="w-full px-2 py-1 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                            autoFocus
-                                          >
-                                            <option value="">Select Account</option>
-                                            {accounts.map(account => (
-                                              <option key={account.code} value={account.code}>
-                                                {account.code} - {account.name}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        ) : (
-                                          <div className="flex items-center space-x-2">
-                                            <div className="flex-1">
-                                              {transaction.accountCode ? (
-                                                <div className="space-y-1">
-                                                  <div className="text-sm font-medium text-slate-800">
-                                                    {getAccountName(transaction.accountCode)}
-                                                  </div>
-                                                  <div className="text-xs text-slate-500">
-                                                    Code: {transaction.accountCode}
-                                                  </div>
-                                                </div>
-                                              ) : (
-                                                <div className="text-sm text-slate-400 italic">
-                                                  No account assigned
-                                                </div>
-                                              )}
-                                            </div>
-                                            <button
-                                              onClick={() => {
-                                                setEditingId(transaction.id);
-                                                setEditingField('account');
-                                              }}
-                                              className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
-                                              title="Edit account"
-                                            >
-                                              <CommonIcons.edit.icon className="w-3 h-3" />
-                                            </button>
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      {/* Amount Pill */}
-                                      <div className="relative px-3 py-1.5 rounded-lg font-bold text-sm backdrop-blur-xl border border-white/30 bg-white/10 shadow-sm">
-                                        <div className={`relative z-10 font-semibold ${
-                                          transaction.amount >= 0 
-                                            ? 'text-green-700' 
-                                            : 'text-red-700'
-                                        }`}>
-                                          {transaction.amount >= 0 ? '+' : ''}${Math.abs(transaction.amount).toFixed(2)}
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Confidence Badge */}
-                                      {transaction.confidence !== undefined && 
-                                       transaction.accountCode && 
-                                       transaction.accountCode !== '' && 
-                                       transaction.accountCode !== 'uncategorized' &&
-                                       getAccountName(transaction.accountCode) !== 'Uncategorized' && (
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                          (transaction.confidence ?? 0) >= 90 
-                                            ? 'bg-green-100 text-green-800' 
-                                            : (transaction.confidence ?? 0) >= 70 
-                                            ? 'bg-yellow-100 text-yellow-800'
-                                            : 'bg-red-100 text-red-800'
-                                        }`}>
-                                          {transaction.confidence ?? 0}%
-                                        </span>
-                                      )}
-                                      
-                                      {/* AI Categorization Button */}
-                                      {!transaction.isApproved && (
-                                        <AICategorizationButton
-                                          transaction={transaction}
-                                          onCategorize={(accountCode, confidence) => handleAICategorize(transaction.id, accountCode, confidence)}
-                                          province={province}
-                                          onKeywordAdded={(keyword, accountCode) => {
-                                            setNotification(`Added keyword "${keyword}" for account ${accountCode}`);
-                                          }}
-                                        />
-                                      )}
-                                      
-                                      {/* Actions */}
-                                      <div className="flex items-center space-x-1">
-                                        {!transaction.isApproved && (
-                                          <button
-                                            onClick={() => handleApprove(transaction.id)}
-                                            disabled={!transaction.accountCode}
-                                            className={`px-2 py-1 rounded text-xs font-medium transition-all duration-200 ${
-                                              transaction.accountCode
-                                                ? 'bg-green-500 text-white hover:bg-green-600'
-                                                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                            }`}
-                                            title={transaction.accountCode ? 'Approve this transaction' : 'Set account first'}
-                                          >
-                                            <AppIcons.status.approved className="w-3 h-3" />
-                                          </button>
-                                        )}
-                                        {transaction.isApproved && (
-                                          <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
-                                            ✓
-                                          </span>
-                                        )}
-                                      </div>
-                                      
-                                      {/* Feedback Section */}
-                                      {transaction.accountCode && !transaction.feedback && (
-                                        <div className="flex items-center space-x-1">
-                                          <button
-                                            onClick={() => handleFeedback(transaction.id, true)}
-                                            className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors text-xs"
-                                            title="Categorization is correct"
-                                          >
-                                            <AppIcons.feedback.thumbsUp className="w-3 h-3" />
-                                          </button>
-                                          <button
-                                            onClick={() => handleFeedback(transaction.id, false)}
-                                            className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors text-xs"
-                                            title="Categorization needs correction"
-                                          >
-                                            <AppIcons.feedback.thumbsDown className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                      )}
-                                      {transaction.feedback && (
-                                        <div className="flex items-center space-x-1">
-                                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                            transaction.feedback.isCorrect 
-                                              ? 'bg-green-100 text-green-800' 
-                                              : 'bg-red-100 text-red-800'
-                                          }`}>
-                                            {transaction.feedback.isCorrect ? (
-                                              <AppIcons.feedback.correct className="w-3 h-3" />
-                                            ) : (
-                                              <AppIcons.feedback.incorrect className="w-3 h-3" />
-                                            )}
-                                          </span>
-                                          <button
-                                            onClick={() => clearFeedback(transaction.id)}
-                                            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors text-xs"
-                                            title="Clear feedback"
-                                          >
-                                            ×
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                        <div className="flex items-center space-x-4">
+                          <span className={`font-semibold text-sm ${
+                            transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            ${Math.abs(transaction.amount).toFixed(2)}
+                          </span>
+                          
+                          {getTaxRate(transaction.accountCode) !== undefined && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {getTaxRate(transaction.accountCode)}%
+                            </span>
+                          )}
+                          
+                          {transaction.confidence && (
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              transaction.confidence >= 90 ? 'bg-green-100 text-green-800' :
+                              transaction.confidence >= 70 ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {transaction.confidence}%
+                            </span>
+                          )}
+                          
+                          {/* Account Dropdown for Grouped View */}
+                          {!transaction.accountCode ? (
+                            <SearchableAccountDropdown
+                              currentValue=""
+                              onSelect={(accountCode) => handleAccountChange(transaction.id, accountCode)}
+                              placeholder="Select account..."
+                            />
+                          ) : (
+                            <div className="flex items-center space-x-2">
+                              <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
+                                {getAccountName(transaction.accountCode)}
+                              </span>
+                              <button
+                                onClick={() => handleAccountChange(transaction.id, '')}
+                                className="text-slate-400 hover:text-slate-600 transition-colors text-xs"
+                                title="Clear account"
+                              >
+                                ×
+                              </button>
                             </div>
+                          )}
+                          
+                          <div className="flex items-center space-x-2">
+                            <AICategorizationButton
+                              transaction={transaction}
+                              onCategorize={(accountCode, confidence) => 
+                                handleIndividualAICategorize(transaction.id, accountCode, confidence)
+                              }
+                              province={province}
+                              disabled={false}
+                            />
+                            
+                            {transaction.isApproved ? (
+                              <button
+                                onClick={() => handleIndividualUnapprove(transaction.id)}
+                                className="p-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                                title="Remove approval"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleIndividualApprove(transaction.id)}
+                                className="p-1.5 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
+                                title="Approve transaction"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                              </button>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
-                    );
-                  })}
-              </div>
-            )}
-          </div>
-        )}
-        
-        {filteredTransactions.length === 0 && (
-          <div className="text-center py-16 text-slate-500">
-            No transactions match the current filter.
-          </div>
-        )}
-      </div>
-
-      {/* Pagination info */}
-      <div className="text-sm text-slate-500 text-center">
-        Showing {filteredTransactions.length} of {transactions.length} transactions
-        {selectedTransactions.size > 0 && (
-          <span className="ml-4 text-slate-700 font-medium">
-            • {selectedTransactions.size} selected
-          </span>
-        )}
-      </div>
-
-      {/* Bulk Category Selector Modal */}
-      {showBulkSelector && (
-        <BulkCategorySelector
-          transactions={transactions}
-          onBulkUpdate={handleBulkUpdate}
-          onClose={() => setShowBulkSelector(false)}
-          province={province}
-        />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
+
+             {/* Bulk Categorization Modal */}
+       {bulkCategorySuggestion.show && (
+         <div 
+           className="modal-backdrop"
+           style={{
+             position: 'fixed',
+             top: 0,
+             left: 0,
+             right: 0,
+             bottom: 0,
+             backgroundColor: 'rgba(0, 0, 0, 0)', // No overlay
+             display: 'flex',
+             alignItems: 'center',
+             justifyContent: 'center',
+             zIndex: 9999,
+             padding: '16px'
+           }}
+         >
+           <div 
+             className="modal-container"
+             style={{
+               backgroundColor: '#FFFFFF',
+               borderRadius: '16px',
+               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+               maxWidth: '600px',
+               width: '100%',
+               maxHeight: '90vh',
+               overflow: 'hidden',
+               border: '1px solid #E2E8F0'
+             }}
+           >
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Similar Transactions Found</h2>
+                <p className="text-slate-600 mt-1">
+                  Would you like to apply the same category to {bulkCategorySuggestion.similarTransactions.length} similar transactions?
+                </p>
+              </div>
+              <button
+                onClick={handleRejectBulkCategorization}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Source Transaction */}
+            <div className="p-6 border-b border-slate-200">
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-green-800 mb-2">Source Transaction</h3>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-700">{bulkCategorySuggestion.sourceTransaction?.description}</span>
+                  <span className="text-sm font-semibold text-green-600">
+                    ${Math.abs(bulkCategorySuggestion.sourceTransaction?.amount || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  Category: {getAccountName(bulkCategorySuggestion.suggestedAccount)}
+                </div>
+              </div>
+            </div>
+
+            {/* Similar Transactions */}
+            <div className="p-6 max-h-60 overflow-y-auto">
+              <h3 className="text-sm font-medium text-slate-800 mb-3">Similar Transactions</h3>
+              <div className="space-y-2">
+                {bulkCategorySuggestion.similarTransactions.map((transaction) => (
+                  <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <span className="text-sm text-slate-700 truncate">{transaction.description}</span>
+                    <span className="text-sm font-semibold text-slate-600">
+                      ${Math.abs(transaction.amount).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="p-6 border-t border-slate-200">
+              <div className="flex gap-3">
+                <button
+                  onClick={handleRejectBulkCategorization}
+                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  No, Keep Individual
+                </button>
+                <button
+                  onClick={handleAcceptBulkCategorization}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  Yes, Apply to All
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
     </div>
   );
-} 
-
-export default TransactionTable;
+}

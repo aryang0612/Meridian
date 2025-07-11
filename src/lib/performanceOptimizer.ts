@@ -184,20 +184,54 @@ export const performanceTracker = new PerformanceTracker();
 
 // Cache utilities
 export const CacheUtils = {
-  // Generate cache key for transaction
-  generateCacheKey(transaction: Transaction): string {
-    return `${transaction.description}_${transaction.amount}`.toLowerCase().replace(/\s+/g, '_');
+  // Generate comprehensive cache key for transaction to prevent collisions
+  generateCacheKey(transaction: Transaction, context?: { province?: string; userId?: string }): string {
+    // Create a more robust key that includes context and prevents collisions
+    const parts = [
+      transaction.description?.toLowerCase().trim() || 'no_desc',
+      transaction.amount?.toString() || '0',
+      transaction.date?.toString() || 'no_date',
+      context?.province || 'default_province',
+      context?.userId || 'default_user'
+    ];
+    
+    // Use a separator that's unlikely to appear in transaction descriptions
+    const key = parts.join('||');
+    
+    // Generate hash for consistent key length and prevent collisions
+    return this.hashString(key);
   },
 
-  // Check if cache entry is still valid (1 hour TTL)
-  isCacheValid(timestamp: number, ttlMs: number = 3600000): boolean {
+  // Simple hash function for cache keys
+  hashString(str: string): string {
+    let hash = 0;
+    if (str.length === 0) return hash.toString();
+    
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    
+    return `cache_${Math.abs(hash).toString(36)}`;
+  },
+
+  // Check if cache entry is still valid (reduced TTL for better accuracy)
+  isCacheValid(timestamp: number, ttlMs: number = 1800000): boolean { // 30 minutes instead of 1 hour
     return Date.now() - timestamp < ttlMs;
+  },
+
+  // Invalidate cache when patterns or user corrections change
+  invalidateCache(reason: string = 'manual'): void {
+    console.log(`🗑️ Invalidating caches due to: ${reason}`);
+    categorizationCache.clear();
+    patternCache.clear();
   },
 
   // Clean expired cache entries
   cleanExpiredEntries(): void {
     const now = Date.now();
-    const ttl = 3600000; // 1 hour
+    const ttl = 1800000; // 30 minutes
 
     // Clean categorization cache
     for (const [key, value] of (categorizationCache as any).cache) {

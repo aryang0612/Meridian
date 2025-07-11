@@ -5,7 +5,6 @@ import ClientLayout from '../components/ClientLayout'
 import StorageIndicator from '../components/StorageIndicator'
 import { FinancialDataProvider } from '../context/FinancialDataContext'
 import { AuthProvider } from '../context/AuthContext'
-import ErrorBoundary from '../components/ErrorBoundary';
 
 export const metadata: Metadata = {
   title: 'Meridian AI - Canadian Bookkeeping Automation',
@@ -16,18 +15,16 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body suppressHydrationWarning>
-        <ErrorBoundary>
-          <AuthProvider>
-            <FinancialDataProvider>
-              <ClientLayout>
-                {children}
-                <FloatingChat />
-                <StorageIndicator />
-              </ClientLayout>
-            </FinancialDataProvider>
-          </AuthProvider>
-        </ErrorBoundary>
+      <body>
+        <AuthProvider>
+          <FinancialDataProvider>
+            <ClientLayout>
+              {children}
+              <FloatingChat />
+              <StorageIndicator />
+            </ClientLayout>
+          </FinancialDataProvider>
+        </AuthProvider>
       </body>
     </html>
   )

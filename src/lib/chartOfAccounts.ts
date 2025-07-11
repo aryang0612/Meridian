@@ -27,61 +27,135 @@ export class ChartOfAccounts {
   private currentProvince: string = 'ON';
   private popularAccounts: Map<string, number> = new Map();
   private static instances: Map<string, ChartOfAccounts> = new Map();
+  private isLoading: boolean = false;
+  private isInitialized: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor(province: string = 'ON') {
     this.currentProvince = province;
-    this.initializeAccounts();
+    // Don't call initializeAccounts in constructor - make it explicit
   }
 
   // Singleton pattern to prevent multiple instances
   static getInstance(province: string = 'ON'): ChartOfAccounts {
-    if (!ChartOfAccounts.instances.has(province)) {
-      ChartOfAccounts.instances.set(province, new ChartOfAccounts(province));
+    console.log(`🏭 ChartOfAccounts.getInstance called with province: ${province}`);
+    
+    // Use a single global instance and change its province as needed
+    if (!ChartOfAccounts.instances.has('global')) {
+      console.log(`🆕 Creating new ChartOfAccounts instance for province: ${province}`);
+      ChartOfAccounts.instances.set('global', new ChartOfAccounts(province));
     }
-    return ChartOfAccounts.instances.get(province)!;
+    
+    const instance = ChartOfAccounts.instances.get('global')!;
+    console.log(`🔍 Current instance province: ${instance.currentProvince}, requested: ${province}`);
+    
+    // Update province if different
+    if (instance.currentProvince !== province) {
+      console.log(`🔄 Province mismatch, setting province from ${instance.currentProvince} to ${province}`);
+      instance.currentProvince = province;
+      instance.isInitialized = false;
+      instance.initializationPromise = null; // Clear cached promise
+      // Don't await here - let the caller handle async initialization
+    }
+    
+    return instance;
+  }
+
+  // Add method to check if accounts are loaded
+  isReady(): boolean {
+    return this.isInitialized && !this.isLoading;
+  }
+
+  // Add method to wait for initialization
+  async waitForInitialization(): Promise<void> {
+    if (this.isInitialized) return;
+    if (this.initializationPromise) {
+      await this.initializationPromise;
+      return;
+    }
+    await this.initializeAccounts();
   }
 
   private async initializeAccounts(): Promise<void> {
-    this.accounts.clear();
-    
-    try {
-      // Dynamically import the province-specific accounts
-      const moduleMap: Record<string, () => Promise<any>> = {
-        AB: () => import('../data/chartOfAccounts/alberta'),
-        BC: () => import('../data/chartOfAccounts/britishColumbia'),
-        MB: () => import('../data/chartOfAccounts/manitoba'),
-        NB: () => import('../data/chartOfAccounts/newBrunswick'),
-        NL: () => import('../data/chartOfAccounts/newfoundlandLabrador'),
-        NS: () => import('../data/chartOfAccounts/novaScotia'),
-        NU: () => import('../data/chartOfAccounts/nunavut'),
-        NT: () => import('../data/chartOfAccounts/northwestTerritories'),
-        ON: () => import('../data/chartOfAccounts/ontario'),
-        PE: () => import('../data/chartOfAccounts/princeEdwardIsland'),
-        QC: () => import('../data/chartOfAccounts/quebec'),
-        SK: () => import('../data/chartOfAccounts/saskatchewan'),
-        YT: () => import('../data/chartOfAccounts/yukon'),
-      };
-
-      const importModule = moduleMap[this.currentProvince] || moduleMap['ON'];
-      const module = await importModule();
-      const accountsKey = `${this.currentProvince}_ACCOUNTS`;
-      const accounts = module[accountsKey] || module['ON_ACCOUNTS'];
-
-      for (const acc of accounts) {
-        this.accounts.set(acc.code, {
-          code: acc.code,
-          name: acc.name,
-          type: acc.type as any,
-          taxCode: acc.taxCode,
-          isPopular: false,
-          description: acc.description
-        });
-      }
-    } catch (error) {
-      console.error('Error loading chart of accounts:', error);
-      // Fallback to basic accounts if loading fails
-      this.loadFallbackAccounts();
+    if (this.isLoading) {
+      await this.initializationPromise;
+      return;
     }
+    
+    this.isLoading = true;
+    this.isInitialized = false;
+    
+    this.initializationPromise = (async () => {
+      this.accounts.clear();
+      console.log(`🧹 Cleared accounts map for province: ${this.currentProvince}`);
+      
+      try {
+        // Dynamically import the province-specific accounts
+        const moduleMap: Record<string, () => Promise<any>> = {
+          AB: () => import('../data/chartOfAccounts/alberta'),
+          BC: () => import('../data/chartOfAccounts/britishColumbia'),
+          MB: () => import('../data/chartOfAccounts/manitoba'),
+          NB: () => import('../data/chartOfAccounts/newBrunswick'),
+          NL: () => import('../data/chartOfAccounts/newfoundlandLabrador'),
+          NS: () => import('../data/chartOfAccounts/novaScotia'),
+          NU: () => import('../data/chartOfAccounts/nunavut'),
+          NT: () => import('../data/chartOfAccounts/northwestTerritories'),
+          ON: () => import('../data/chartOfAccounts/ontario'),
+          PE: () => import('../data/chartOfAccounts/princeEdwardIsland'),
+          QC: () => import('../data/chartOfAccounts/quebec'),
+          SK: () => import('../data/chartOfAccounts/saskatchewan'),
+          YT: () => import('../data/chartOfAccounts/yukon'),
+        };
+
+        const importModule = moduleMap[this.currentProvince] || moduleMap['ON'];
+        console.log(`📦 Loading module for province: ${this.currentProvince}`);
+        
+        const accountsModule = await importModule();
+        const accountsKey = `${this.currentProvince}_ACCOUNTS`;
+        console.log(`🔍 Looking for accounts key: "${accountsKey}"`);
+        console.log(`📋 Available keys in module:`, Object.keys(accountsModule));
+        
+        const accounts = accountsModule[accountsKey] || accountsModule['ON_ACCOUNTS'];
+        
+        if (!accounts) {
+          console.error(`❌ No accounts found for key "${accountsKey}" or fallback "ON_ACCOUNTS"`);
+          throw new Error(`Failed to load accounts for province ${this.currentProvince}`);
+        }
+        
+        console.log(`📊 Found ${accounts.length} accounts for province ${this.currentProvince}`);
+
+        for (const acc of accounts) {
+          this.accounts.set(acc.code, {
+            code: acc.code,
+            name: acc.name,
+            type: acc.type as any,
+            taxCode: acc.taxCode,
+            isPopular: false,
+            description: acc.description
+          });
+        }
+
+        // Debug: Show tax codes for key accounts
+        const debugAccounts = ['200', '453', '449', '420'];
+        for (const code of debugAccounts) {
+          const account = this.accounts.get(code);
+          if (account) {
+            console.log(`🏷️  Account ${code} (${account.name}): "${account.taxCode}"`);
+          }
+        }
+
+        console.log(`📊 Chart of Accounts initialized for province: ${this.currentProvince} (${this.accounts.size} accounts)`);
+      } catch (error) {
+        console.error('Error loading chart of accounts:', error);
+        // Fallback to basic accounts if loading fails
+        this.loadFallbackAccounts();
+      } finally {
+        this.isLoading = false;
+        this.isInitialized = true;
+      }
+    })();
+
+    await this.initializationPromise;
   }
 
   private loadFallbackAccounts(): void {
@@ -116,10 +190,24 @@ export class ChartOfAccounts {
   }
 
   async setProvince(province: string): Promise<void> {
-    if (this.currentProvince !== province) {
-      this.currentProvince = province;
-      await this.initializeAccounts();
+    console.log(`🌍 ChartOfAccounts.setProvince: Changing from ${this.currentProvince} to ${province}`);
+    console.log(`🔍 Current accounts size: ${this.accounts.size}, isInitialized: ${this.isInitialized}`);
+    
+    // ALWAYS force reload accounts when province changes, even if it appears to be the same
+    this.currentProvince = province;
+    this.isInitialized = false;
+    this.initializationPromise = null; // Clear any cached promise
+    
+    console.log(`🔄 ChartOfAccounts: Province set to ${province}, forcing account reload...`);
+    await this.initializeAccounts();
+    
+    // Verify the accounts were actually loaded correctly
+    const sampleAccount = this.accounts.get('453'); // Office Expenses
+    if (sampleAccount) {
+      console.log(`✅ Sample account 453 (Office Expenses): ${sampleAccount.name}, Tax Code: "${sampleAccount.taxCode}"`);
     }
+    
+    console.log(`✅ ChartOfAccounts: Successfully reinitialized for province ${province} (${this.accounts.size} accounts)`);
   }
 
   getProvince(): string {
@@ -127,6 +215,9 @@ export class ChartOfAccounts {
   }
 
   getAllAccounts(): AccountWithTax[] {
+    if (!this.isReady()) {
+      return [];
+    }
     return Array.from(this.accounts.values()).map(account => this.addTaxInfo(account));
   }
 
@@ -283,7 +374,7 @@ export class ChartOfAccounts {
       'Bank Fees': ['404'], // Bank Fees
       'Telecommunications': ['489'], // Telephone & Internet
       'Utilities': ['442', '445', '447'], // Electricity, Natural Gas, Water
-      'Professional Services': ['412', '441'], // Consulting & Accounting, Legal expenses
+      'Professional Services': ['441'], // Legal expenses
       'Insurance': ['433'], // Insurance
       'Software': ['455'], // Supplies and Small Tools (software falls under this)
       'General Expenses': ['453'], // Office Expenses

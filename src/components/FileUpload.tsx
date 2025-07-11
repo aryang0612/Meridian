@@ -19,9 +19,10 @@ interface FileUploadProps {
   }) => void;
   onError: (error: string, fileName?: string) => void;
   disabled: boolean;
+  aiModeEnabled?: boolean; // NEW: AI mode toggle
 }
 
-export default function FileUpload({ onFileProcessed, onError, disabled }: FileUploadProps) {
+export default function FileUpload({ onFileProcessed, onError, disabled, aiModeEnabled = false }: FileUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -91,16 +92,16 @@ export default function FileUpload({ onFileProcessed, onError, disabled }: FileU
         
         setProcessingStep('Processing transactions...');
         if (typeof csvProcessor.parseAndCategorizeCSV === 'function' && csvProcessor.parseAndCategorizeCSV.length > 1) {
-          result = await csvProcessor.parseAndCategorizeCSV(csvFile, setProgress);
+          result = await csvProcessor.parseAndCategorizeCSV(csvFile, setProgress, aiModeEnabled);
         } else {
-          result = await csvProcessor.parseAndCategorizeCSV(csvFile);
+          result = await csvProcessor.parseAndCategorizeCSV(csvFile, undefined, aiModeEnabled);
         }
       } else {
         setProcessingStep('Processing CSV file...');
         if (typeof csvProcessor.parseAndCategorizeCSV === 'function' && csvProcessor.parseAndCategorizeCSV.length > 1) {
-          result = await csvProcessor.parseAndCategorizeCSV(file, setProgress);
+          result = await csvProcessor.parseAndCategorizeCSV(file, setProgress, aiModeEnabled);
         } else {
-          result = await csvProcessor.parseAndCategorizeCSV(file);
+          result = await csvProcessor.parseAndCategorizeCSV(file, undefined, aiModeEnabled);
         }
       }
       

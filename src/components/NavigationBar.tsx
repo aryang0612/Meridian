@@ -28,33 +28,35 @@ export default function NavigationBar({
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           {/* Left: Logo and Company Info */}
-          <Link href="/" className="flex items-center space-x-4 hover:opacity-80 transition-opacity">
-            <div className="relative">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg shadow-purple-600/20">
-                <Image 
-                  src="/meridian-logo-new.png" 
-                  alt="Meridian" 
-                  width={40} 
-                  height={40} 
-                  className="rounded-lg object-contain"
-                  priority
-                />
+          <div className="flex items-center space-x-4 flex-shrink-0">
+            <Link href="/" className="flex items-center space-x-4 hover:opacity-80 transition-opacity">
+              <div className="relative">
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg shadow-purple-600/20">
+                  <Image 
+                    src="/meridian-logo-new.png" 
+                    alt="Meridian" 
+                    width={40} 
+                    height={40} 
+                    className="rounded-lg object-contain"
+                    priority
+                  />
+                </div>
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-300 rounded-full opacity-40"></div>
               </div>
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-300 rounded-full opacity-40"></div>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">Meridian AI</h1>
-              <p className="text-xs text-slate-600 -mt-1">Bookkeeping Solutions</p>
-            </div>
-          </Link>
+              <div>
+                <h1 className="text-xl font-bold text-slate-900">Meridian AI</h1>
+                <p className="text-xs text-slate-600 -mt-1">Bookkeeping Solutions</p>
+              </div>
+            </Link>
+          </div>
 
-          {/* Center: Navigation Links */}
-          <nav className="hidden md:flex items-center space-x-1">
+          {/* Center: Navigation Links - Properly Centered */}
+          <nav className="hidden md:flex items-center justify-center space-x-1 flex-1">
             {navigationItems.map((item) => (
               <Link
                 key={item.key}
                 href={item.href}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 whitespace-nowrap ${
                   activeSection === item.key
                     ? 'bg-purple-100 text-purple-700 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -66,22 +68,23 @@ export default function NavigationBar({
           </nav>
 
           {/* Right: Status and User Area */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3 flex-shrink-0">
             {/* New File Button */}
             {showNewFileButton && onNewFile && (
               <button
                 onClick={onNewFile}
-                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg font-medium hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transform hover:scale-105"
+                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg font-medium hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transform hover:scale-105 whitespace-nowrap"
               >
                 <AppIcons.actions.add className={IconSizes.sm} />
                 <span className="hidden sm:inline">New File</span>
+                <span className="sm:hidden">+</span>
               </button>
             )}
 
             {/* CRA Compliant Badge */}
-            <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-full">
+            <div className="hidden lg:flex items-center space-x-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-full">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-xs font-medium text-green-700">CRA Compliant</span>
+              <span className="text-xs font-medium text-green-700 whitespace-nowrap">CRA Compliant</span>
             </div>
 
             {/* Notifications */}
@@ -95,7 +98,7 @@ export default function NavigationBar({
               <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center">
                 <span className="text-white text-sm font-medium">JD</span>
               </div>
-              <div className="hidden lg:block">
+              <div className="hidden xl:block">
                 <p className="text-sm font-medium text-slate-900">John Doe</p>
                 <p className="text-xs text-slate-500">Business Owner</p>
               </div>

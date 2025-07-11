@@ -93,14 +93,9 @@ export default function ReportsPage() {
         try {
           console.log('🔄 Initializing ReportGenerator...');
           
-          // Create ChartOfAccounts instance first
-          const chartOfAccounts = new ChartOfAccounts();
-          
-          // Initialize with default province (ON)
-          await chartOfAccounts.setProvince('ON');
-          
-          // Wait for Chart of Accounts to initialize
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Use ChartOfAccounts singleton instance
+          const chartOfAccounts = ChartOfAccounts.getInstance('ON');
+          await chartOfAccounts.waitForInitialization();
           
           // Create ReportGenerator with ChartOfAccounts
           const generator = new ReportGenerator(chartOfAccounts);
@@ -112,7 +107,7 @@ export default function ReportsPage() {
           console.error('❌ Failed to initialize ReportGenerator:', error);
           // Create a fallback generator even if Chart of Accounts fails
           try {
-            const fallbackChartOfAccounts = new ChartOfAccounts();
+            const fallbackChartOfAccounts = ChartOfAccounts.getInstance('ON');
             const fallbackGenerator = new ReportGenerator(fallbackChartOfAccounts);
             setReportGenerator(fallbackGenerator);
             setIsReportGeneratorReady(true);

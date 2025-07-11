@@ -1,10 +1,10 @@
 import Papa from 'papaparse';
 import { Transaction, ValidationResult } from './types';
 import { BANK_FORMATS, BankFormat } from '../data/bankFormats';
-import { AIEngine } from './aiEngine';
-import { unifiedPatternEngine } from './unifiedPatternEngine';
+import { unifiedCategorizationEngine } from './unifiedCategorizationEngine';
 import { parallelProcessor, performanceTracker } from './performanceOptimizer';
-import { detectDuplicates, DuplicateDetectionResult } from './duplicateDetector';
+// import { detectDuplicates, DuplicateDetectionResult } from './duplicateDetector'; // DISABLED
+import { DuplicateDetectionResult } from './duplicateDetector';
 import { looksLikeAmount, parseAmountFlexible, normalizeAmount, generateId, calculateStringSimilarity } from './formatUtils';
 
 // Enhanced header formatting patterns
@@ -123,7 +123,6 @@ const HEADER_FORMATTING_OPTIONS = {
 };
 
 export class CSVProcessor {
-  private aiEngine = new AIEngine();
   
 
 
@@ -733,7 +732,11 @@ export class CSVProcessor {
   /**
    * Parse CSV and auto-categorize transactions
    */
-  async parseAndCategorizeCSV(file: File, onProgress?: (progress: number) => void): Promise<{
+  async parseAndCategorizeCSV(
+    file: File, 
+    onProgress?: (progress: number) => void,
+    aiModeEnabled: boolean = false
+  ): Promise<{
     transactions: Transaction[];
     validation: ValidationResult;
     bankFormat: BankFormat | 'Unknown';
@@ -761,12 +764,13 @@ export class CSVProcessor {
       };
     }
     
-    // Check for duplicates before categorization
-    const duplicateResult = detectDuplicates(transactions);
+    // DISABLED - Check for duplicates before categorization (user requested duplicate warning removal)
+    // const duplicateResult = detectDuplicates(transactions);
+    const duplicateResult = { duplicateGroups: [], cleanTransactions: transactions, duplicateCount: 0 };
     onProgress?.(45);
     
-    // Initialize AI engine and ensure chart of accounts is loaded
-    await this.aiEngine.initialize();
+    // Initialize unified categorization engine
+    await unifiedCategorizationEngine.initialize();
     onProgress?.(50);
     
     // Phase 2: AI categorization (50-100%)
@@ -775,8 +779,21 @@ export class CSVProcessor {
     
     for (let i = 0; i < transactions.length; i += batchSize) {
       const batch = transactions.slice(i, i + batchSize);
-      const batchResults = await this.aiEngine.categorizeBatch(batch);
-      categorizedTransactions.push(...batchResults);
+      
+      // Process each transaction using unified categorization engine
+      for (const transaction of batch) {
+        try {
+          const result = await unifiedCategorizationEngine.categorizeTransaction(transaction);
+          transaction.accountCode = result.accountCode;
+          transaction.confidence = result.confidence;
+        } catch (error) {
+          console.error('Error categorizing transaction:', error);
+          transaction.accountCode = '453';
+          transaction.confidence = 0;
+        }
+      }
+      
+      categorizedTransactions.push(...batch);
       
       if (onProgress) {
         const categorizationProgress = (categorizedTransactions.length / transactions.length) * 50; // 50% for categorization
@@ -794,21 +811,42 @@ export class CSVProcessor {
     // Double-check that account codes are properly assigned
     const finalTransactions = categorizedTransactions.map(transaction => {
       if (transaction.category && !transaction.accountCode) {
-        const result = this.aiEngine.categorizeTransaction(transaction);
-        return {
-          ...transaction,
-          accountCode: result.accountCode
-        };
+        transaction.accountCode = '453'; // Default fallback
       }
       return transaction;
     });
     
-    // Calculate stats
-    const categorizationStats = this.calculateCategorizationStats(finalTransactions);
+    // Phase 3: Auto-ChatGPT for uncategorized transactions (if AI mode enabled)
+    let processedTransactions = finalTransactions;
+    if (aiModeEnabled) {
+      console.log('🤖 AI Mode enabled - processing uncategorized transactions with ChatGPT...');
+      const uncategorizedTransactions = finalTransactions.filter(t => 
+        !t.accountCode || 
+        t.accountCode === '453' && (t.confidence || 0) < 70
+      );
+      
+      if (uncategorizedTransactions.length > 0) {
+        console.log(`🤖 Found ${uncategorizedTransactions.length} uncategorized transactions for auto-ChatGPT processing`);
+        onProgress?.(96);
+        
+        processedTransactions = await this.processUncategorizedWithChatGPT(
+          finalTransactions, 
+          uncategorizedTransactions,
+          (current, total) => {
+            // Update progress for ChatGPT processing (96-99%)
+            const chatGptProgress = (current / total) * 3; // 3% for ChatGPT phase
+            onProgress?.(Math.min(99, Math.round(96 + chatGptProgress)));
+          }
+        );
+      }
+    }
+    
+    // Calculate final stats
+    const categorizationStats = this.calculateCategorizationStats(processedTransactions);
     onProgress?.(100);
     
     return {
-      transactions: finalTransactions,
+      transactions: processedTransactions,
       validation,
       bankFormat,
       duplicateResult,
@@ -1307,6 +1345,82 @@ export class CSVProcessor {
   }
 
   /**
+   * Process uncategorized transactions with ChatGPT (AI mode)
+   */
+  private async processUncategorizedWithChatGPT(
+    allTransactions: Transaction[],
+    uncategorizedTransactions: Transaction[],
+    onProgress?: (current: number, total: number) => void
+  ): Promise<Transaction[]> {
+    const processedTransactions = [...allTransactions];
+    let successCount = 0;
+    let errorCount = 0;
+    
+    console.log(`🤖 Auto-ChatGPT processing ${uncategorizedTransactions.length} uncategorized transactions...`);
+    
+    // Process in batches of 3 to avoid overwhelming the API
+    for (let i = 0; i < uncategorizedTransactions.length; i += 3) {
+      const batch = uncategorizedTransactions.slice(i, i + 3);
+      
+      const batchPromises = batch.map(async (transaction) => {
+        try {
+          console.log(`🤖 Auto-ChatGPT: Processing "${transaction.description}"...`);
+          
+          const response = await fetch('/api/ai-categorize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              transaction: {
+                description: transaction.description,
+                amount: transaction.amount
+              },
+              forceAI: true
+            })
+          });
+          
+          const result = await response.json();
+          
+          if (response.ok && result.accountCode) {
+            // Find and update the transaction in processedTransactions
+            const transactionIndex = processedTransactions.findIndex(t => t.id === transaction.id);
+            if (transactionIndex !== -1) {
+                             processedTransactions[transactionIndex] = {
+                 ...processedTransactions[transactionIndex],
+                 accountCode: result.accountCode,
+                 category: result.category || result.accountCode,
+                 confidence: result.confidence || 95,
+                 aiCategorized: true
+               };
+              console.log(`✅ Auto-ChatGPT success: ${transaction.description} -> ${result.accountCode} (${result.confidence}%)`);
+              successCount++;
+            }
+          } else {
+            console.log(`❌ Auto-ChatGPT failed: ${transaction.description} - ${result.error || 'Unknown error'}`);
+            errorCount++;
+          }
+        } catch (error) {
+          console.error(`❌ Auto-ChatGPT error for "${transaction.description}":`, error);
+          errorCount++;
+        }
+      });
+      
+      await Promise.all(batchPromises);
+      
+      // Update progress
+      const currentProgress = Math.min(i + 3, uncategorizedTransactions.length);
+      onProgress?.(currentProgress, uncategorizedTransactions.length);
+      
+      // Small delay between batches to avoid rate limiting
+      if (i + 3 < uncategorizedTransactions.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    console.log(`🤖 Auto-ChatGPT completed: ${successCount} successes, ${errorCount} failures`);
+    return processedTransactions;
+  }
+
+  /**
    * Categorize all transactions using unified categorization with parallel processing
    */
   async categorizeAllTransactions(transactions: Transaction[]): Promise<Transaction[]> {
@@ -1314,17 +1428,27 @@ export class CSVProcessor {
     
     const categorizedTransactions = await parallelProcessor.processTransactions(
       transactions,
-      (transaction) => {
-        const result = unifiedPatternEngine.categorize(transaction);
-        
-        return {
-          ...transaction,
-          category: result.category,
-          accountCode: result.accountCode,
-          confidence: result.confidence,
-          merchant: result.merchant || this.extractMerchant(transaction.description),
-          inflowOutflow: result.inflowOutflow
-        };
+      async (transaction) => {
+        try {
+          const result = await unifiedCategorizationEngine.categorizeTransaction(transaction);
+          
+          return {
+            ...transaction,
+            category: result.category,
+            accountCode: result.accountCode,
+            confidence: result.confidence,
+            merchant: result.merchant || this.extractMerchant(transaction.description),
+            inflowOutflow: result.inflowOutflow
+          };
+        } catch (error) {
+          console.error('Error categorizing transaction:', error);
+          return {
+            ...transaction,
+            accountCode: '453',
+            confidence: 0,
+            merchant: this.extractMerchant(transaction.description)
+          };
+        }
       },
       (completed, total) => {
         // Optional progress callback - can be used for UI progress updates

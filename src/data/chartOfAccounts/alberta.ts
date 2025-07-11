@@ -17,7 +17,7 @@ export const AB_ACCOUNTS: ChartAccount[] = [
   { code: '400', name: 'Advertising', type: 'Expense', taxCode: 'AB - GST on Purchases (5%)', description: 'Expenses incurred for advertising while trying to increase sales' },
   { code: '404', name: 'Bank Fees', type: 'Expense', taxCode: 'Tax Exempt (0%)', description: 'Fees charged by your bank for transactions regarding your bank account(s).' },
   { code: '408', name: 'Cleaning', type: 'Expense', taxCode: 'AB - GST on Purchases (5%)', description: 'Expenses incurred for cleaning  business property.' },
-  { code: '412', name: 'Consulting & Accounting', type: 'Expense', taxCode: 'AB - GST on Purchases (5%)', description: 'Expenses related to paying consultants' },
+
   { code: '416', name: 'Depreciation', type: 'Expense', taxCode: 'Tax Exempt (0%)', description: 'The amount of the asset\'s cost (based on the useful life) that was consumed during the period' },
   { code: '420', name: 'Entertainment', type: 'Expense', taxCode: 'AB - GST on Purchases (5%)', description: 'Business-related entertainment expenses that are 50% deductible for income tax purposes.' },
   { code: '421', name: 'Entertainment - Alcohol Purchases', type: 'Expense', taxCode: 'AB - GST on Purchases (5%)', description: 'Record business-related alcohol purchases; 50% tax deductible.' },

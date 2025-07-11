@@ -1,5 +1,5 @@
 {
-  "name": "meridian-ai",
+  "name": "meridian-2.0",
   "version": 2,
   "env": {
     "NEXT_PUBLIC_APP_ENV": "production"

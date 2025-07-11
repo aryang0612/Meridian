@@ -1,0 +1,113 @@
+
+> meridian@0.1.0 dev
+> next dev -p 3011 -p 3012
+
+   ▲ Next.js 15.3.4
+   - Local:        http://localhost:3012
+   - Network:      http://172.16.202.147:3012
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1027ms
+ ○ Compiling / ...
+ ✓ Compiled / in 3.7s (1773 modules)
+⚠️ customKeywords.ts is being phased out - add patterns to unifiedPatternEngine.ts instead
+📊 Chart of Accounts initialized for province: ON (70 accounts)
+ GET / 200 in 4113ms
+ ✓ Compiled in 307ms
+ ✓ Compiled in 464ms (815 modules)
+ ✓ Compiled in 437ms (815 modules)
+ ✓ Compiled in 448ms (815 modules)
+ ✓ Compiled in 427ms (815 modules)
+ ✓ Compiled in 423ms (815 modules)
+ ✓ Compiled in 405ms (815 modules)
+ ✓ Compiled in 457ms (815 modules)
+ ✓ Compiled in 54ms (801 modules)
+ ✓ Compiled in 424ms (815 modules)
+ ✓ Compiled in 52ms (801 modules)
+ ✓ Compiled in 417ms (815 modules)
+ ✓ Compiled in 51ms (801 modules)
+ ✓ Compiled in 411ms (815 modules)
+ ✓ Compiled in 51ms (801 modules)
+ ✓ Compiled in 439ms (815 modules)
+ ✓ Compiled in 48ms (801 modules)
+ ✓ Compiled in 425ms (815 modules)
+ ✓ Compiled in 415ms (815 modules)
+ ✓ Compiled in 467ms (815 modules)
+ ✓ Compiled in 55ms (801 modules)
+ ✓ Compiled in 429ms (815 modules)
+ ✓ Compiled in 424ms (815 modules)
+ ✓ Compiled in 445ms (815 modules)
+ ✓ Compiled in 53ms (801 modules)
+ ✓ Compiled in 409ms (815 modules)
+ ✓ Compiled in 432ms (815 modules)
+ ✓ Compiled in 47ms (801 modules)
+ ✓ Compiled in 439ms (815 modules)
+ ✓ Compiled in 48ms (801 modules)
+ ✓ Compiled in 414ms (815 modules)
+ ✓ Compiled in 459ms (815 modules)
+ ✓ Compiled in 51ms (801 modules)
+ ✓ Compiled in 411ms (815 modules)
+ ✓ Compiled in 456ms (815 modules)
+ ✓ Compiled in 51ms (801 modules)
+ ✓ Compiled in 429ms (815 modules)
+ ✓ Compiled in 427ms (815 modules)
+ ✓ Compiled in 55ms (801 modules)
+ ✓ Compiled in 53ms (801 modules)
+ ✓ Compiled in 433ms (815 modules)
+ ✓ Compiled in 54ms (801 modules)
+ ✓ Compiled in 46ms (801 modules)
+ ✓ Compiled in 417ms (815 modules)
+ ✓ Compiled in 58ms (801 modules)
+ ✓ Compiled in 45ms (801 modules)
+ ✓ Compiled in 450ms (815 modules)
+ ✓ Compiled in 58ms (801 modules)
+ ✓ Compiled in 47ms (801 modules)
+ ✓ Compiled in 444ms (815 modules)
+ ✓ Compiled in 48ms (801 modules)
+ ✓ Compiled in 405ms (815 modules)
+ ✓ Compiled in 64ms (801 modules)
+ ✓ Compiled in 411ms (815 modules)
+ ✓ Compiled in 54ms (801 modules)
+ ✓ Compiled in 429ms (815 modules)
+ ✓ Compiled in 59ms (801 modules)
+ ✓ Compiled in 440ms (815 modules)
+ ✓ Compiled in 60ms (801 modules)
+ ✓ Compiled in 422ms (815 modules)
+ ✓ Compiled in 429ms (815 modules)
+ ✓ Compiled in 57ms (801 modules)
+ ✓ Compiled in 423ms (815 modules)
+ ✓ Compiled in 470ms (815 modules)
+ ✓ Compiled in 51ms (801 modules)
+ ✓ Compiled in 427ms (815 modules)
+ ✓ Compiled in 59ms (801 modules)
+ ⨯ ./src/components/TransactionTable.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+     ,-[[36;1;4m/Users/aryangautam/Merdian AI/meridian/src/components/TransactionTable.tsx[0m:519:1]
+ [2m516[0m |   }
+ [2m517[0m | 
+ [2m518[0m |   return (
+ [2m519[0m |     <div className="w-full max-w-none space-y-6">
+     : [35;1m     ^^^[0m
+ [2m520[0m |       {/* Notification Toast */}
+ [2m521[0m |       {notification && (
+ [2m522[0m |         <NotificationToast message={notification} onClose={() => setNotification(null)} />
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/TransactionTable.tsx
+./src/app/page.tsx
+ ✓ Compiled in 453ms (815 modules)
+ ✓ Compiled in 58ms (801 modules)
+ ✓ Compiled in 411ms (815 modules)
+ ✓ Compiled in 416ms (815 modules)
+ ✓ Compiled in 66ms (801 modules)
+ ✓ Compiled in 421ms (815 modules)
+ ✓ Compiled in 43ms (801 modules)
+ ✓ Compiled in 408ms (815 modules)
+ ✓ Compiled in 447ms (815 modules)
+ ✓ Compiled in 56ms (801 modules)
+[?25h

@@ -60,7 +60,7 @@ export class ExportManager {
   private chartOfAccounts: ChartOfAccounts;
 
   constructor(province: string = 'ON') {
-    this.chartOfAccounts = new ChartOfAccounts(province);
+    this.chartOfAccounts = ChartOfAccounts.getInstance(province);
   }
 
   /**
@@ -133,6 +133,56 @@ export class ExportManager {
             required: true,
             transform: (t, coa) => this.getTaxRateForXeroPrecoded(t, coa)
           }
+        ]
+      },
+      {
+        id: 'quickbooks',
+        name: 'QuickBooks Online',
+        description: 'Compatible with QuickBooks Online bank import format',
+        fileExtension: 'csv',
+        columns: [
+          { header: 'Date', key: 'date', required: true, transform: (t) => new Date(t.date).toLocaleDateString('en-US') },
+          { header: 'Description', key: 'description', required: true },
+          { header: 'Amount', key: 'amount', required: true, transform: (t) => t.amount.toFixed(2) },
+          { header: 'Account', key: 'accountCode', transform: (t, coa) => this.getAccountNameForQuickBooks(t, coa) },
+          { header: 'Memo', key: 'merchant' },
+          { header: 'Name', key: 'merchant' },
+          { header: 'Class', key: 'class', transform: () => '' },
+          { header: 'Location', key: 'location', transform: () => '' }
+        ]
+      },
+      {
+        id: 'sage',
+        name: 'Sage 50 Accounting',
+        description: 'Compatible with Sage 50 (Simply Accounting) import format',
+        fileExtension: 'csv',
+        columns: [
+          { header: 'Date', key: 'date', required: true, transform: (t) => new Date(t.date).toLocaleDateString('en-CA') },
+          { header: 'Journal', key: 'journal', transform: () => 'General Journal' },
+          { header: 'Account', key: 'accountCode', required: true },
+          { header: 'Debits', key: 'debit', transform: (t) => t.amount < 0 ? Math.abs(t.amount).toFixed(2) : '0.00' },
+          { header: 'Credits', key: 'credit', transform: (t) => t.amount > 0 ? t.amount.toFixed(2) : '0.00' },
+          { header: 'Comment', key: 'description' },
+          { header: 'Name', key: 'merchant' },
+          { header: 'Allocated', key: 'allocated', transform: () => 'No' }
+        ]
+      },
+      {
+        id: 'basic-accounting',
+        name: 'Basic Accounting CSV',
+        description: 'Simple format for most accounting software (universal)',
+        fileExtension: 'csv',
+        columns: [
+          { header: 'Date', key: 'date', required: true, transform: (t) => new Date(t.date).toLocaleDateString('en-CA') },
+          { header: 'Description', key: 'description', required: true },
+          { header: 'Amount', key: 'amount', required: true, transform: (t) => t.amount.toFixed(2) },
+          { header: 'Category', key: 'category' },
+          { header: 'Account Code', key: 'accountCode' },
+          { header: 'Account Name', key: 'accountName', transform: (t, coa) => this.getAccountName(t.accountCode, coa) },
+          { header: 'Merchant', key: 'merchant' },
+          { header: 'Tax Amount', key: 'taxAmount', transform: (t, coa) => this.calculateTaxAmount(t, coa) },
+          { header: 'Net Amount', key: 'netAmount', transform: (t, coa) => this.calculateNetAmount(t, coa) },
+          { header: 'Reference', key: 'id' }
         ]
       }
     ];
@@ -215,6 +265,10 @@ export class ExportManager {
     options: ExportOptions
   ): Promise<ExportResult> {
     console.log(`📤 Starting export: ${options.format} format, ${transactions.length} transactions`);
+
+    // Ensure chart of accounts is initialized
+    await this.chartOfAccounts.waitForInitialization();
+    console.log(`📊 Chart of Accounts ready for province: ${this.chartOfAccounts.getProvince()}`);
 
     // Get export format
     const format = this.getAvailableFormats().find(f => f.id === options.format);
@@ -386,58 +440,143 @@ export class ExportManager {
    * Get tax rate for Xero precoded format (specific format for cash coding)
    */
   private getTaxRateForXeroPrecoded(transaction: Transaction, chartOfAccounts: ChartOfAccounts): string {
-    if (!transaction.category) return 'Tax Exempt (0%)';
+    let account = null;
     
-    const account = chartOfAccounts.findAccountByCategory(transaction.category);
-    if (!account) return 'Tax Exempt (0%)';
+    // First try to get account by account code, then by category
+    if (transaction.accountCode) {
+      account = chartOfAccounts.getAccount(transaction.accountCode);
+    } else if (transaction.category) {
+      account = chartOfAccounts.findAccountByCategory(transaction.category);
+    }
+    
+    if (!account) {
+      console.log(`💰 No account found for transaction: ${transaction.description} (code: ${transaction.accountCode}, category: ${transaction.category})`);
+      return 'Tax Exempt (0%)';
+    }
     
     // Get the current province from chartOfAccounts
     const province = this.chartOfAccounts.getProvince();
     
+    // Enhanced debug logging
+    console.log(`💰 Tax rate calculation: "${transaction.description}"`);
+    console.log(`   ├── Account: ${account.name} (${account.code})`);
+    console.log(`   ├── Tax Rate: ${account.taxRate}%`);
+    console.log(`   ├── Province: ${province}`);
+    console.log(`   └── Tax Code: ${account.taxCode || 'N/A'}`);
+    
     // Map to exact Xero tax rate names by province and tax type
     // These MUST match exactly what's in Xero or the coding won't persist
     if (account.taxRate === 0) {
-      return 'Tax Exempt (0%)';
+      const result = 'Tax Exempt (0%)';
+      console.log(`   🏷️  Final Tax Rate: ${result}`);
+      return result;
     }
     
+    let result: string;
     switch (province) {
       case 'AB':
-        return 'AB - GST on Purchases (5%)';
+        result = 'AB - GST on Purchases (5%)';
+        break;
       case 'BC':
-        return 'BC - GST/PST on Purchases (12%)';
+        result = 'BC - GST/PST on Purchases (12%)';
+        break;
       case 'MB':
-        return 'MB - GST/RST on Purchases (12%)';
+        result = 'MB - GST/RST on Purchases (12%)';
+        break;
       case 'NB':
-        return 'NB - HST on Purchases (15%)';
+        result = 'NB - HST on Purchases (15%)';
+        break;
       case 'NL':
-        return 'NL - HST on Purchases (15%)';
+        result = 'NL - HST on Purchases (15%)';
+        break;
       case 'NS':
-        return 'NS - HST on Purchases (14%)';
+        result = 'NS - HST on Purchases (14%)';
+        break;
       case 'NT':
-        return 'NT - GST on Purchases (5%)';
+        result = 'NT - GST on Purchases (5%)';
+        break;
       case 'NU':
-        return 'NU - GST on Purchases (5%)';
+        result = 'NU - GST on Purchases (5%)';
+        break;
       case 'ON':
-        return 'ON - HST on Purchases (13%)';
+        result = 'ON - HST on Purchases (13%)';
+        break;
       case 'PE':
-        return 'PE - HST on Purchases (15%)';
+        result = 'PE - HST on Purchases (15%)';
+        break;
       case 'QC':
-        return 'QC - GST/QST on Purchases (14.975%)';
+        result = 'QC - GST/QST on Purchases (14.975%)';
+        break;
       case 'SK':
-        return 'SK - GST/PST on Purchases (11%)';
+        result = 'SK - GST/PST on Purchases (11%)';
+        break;
       case 'YT':
-        return 'YT - GST on Purchases (5%)';
+        result = 'YT - GST on Purchases (5%)';
+        break;
       default:
         // Fallback for unknown provinces
-        if (account.taxType === 'HST') return 'ON - HST on Purchases (13%)';
-        return 'AB - GST on Purchases (5%)';
+        if (account.taxType === 'HST') {
+          result = 'ON - HST on Purchases (13%)';
+        } else {
+          result = 'AB - GST on Purchases (5%)';
+        }
+        console.log(`   ⚠️  Unknown province "${province}", using fallback`);
     }
+    
+    console.log(`   🏷️  Final Tax Rate: ${result}`);
+    return result;
   }
 
 
 
-  setProvince(provinceCode: string): void {
-    this.chartOfAccounts.setProvince(provinceCode);
+  async setProvince(provinceCode: string): Promise<void> {
+    await this.chartOfAccounts.setProvince(provinceCode);
+  }
+
+  /**
+   * Get account name for QuickBooks format
+   */
+  private getAccountNameForQuickBooks(transaction: Transaction, chartOfAccounts: ChartOfAccounts): string {
+    if (!transaction.accountCode) return 'Uncategorized';
+    
+    const account = chartOfAccounts.getAccount(transaction.accountCode);
+    return account ? account.name : 'Uncategorized';
+  }
+
+  /**
+   * Get account name by account code
+   */
+  private getAccountName(accountCode: string | undefined, chartOfAccounts: ChartOfAccounts): string {
+    if (!accountCode) return '';
+    
+    const account = chartOfAccounts.getAccount(accountCode);
+    return account ? account.name : '';
+  }
+
+  /**
+   * Calculate tax amount for transaction
+   */
+  private calculateTaxAmount(transaction: Transaction, chartOfAccounts: ChartOfAccounts): string {
+    if (!transaction.accountCode) return '0.00';
+    
+    const account = chartOfAccounts.getAccount(transaction.accountCode);
+    if (!account || account.taxRate === 0) return '0.00';
+    
+    const taxAmount = Math.abs(transaction.amount) * (account.taxRate / 100);
+    return taxAmount.toFixed(2);
+  }
+
+  /**
+   * Calculate net amount (amount excluding tax)
+   */
+  private calculateNetAmount(transaction: Transaction, chartOfAccounts: ChartOfAccounts): string {
+    if (!transaction.accountCode) return Math.abs(transaction.amount).toFixed(2);
+    
+    const account = chartOfAccounts.getAccount(transaction.accountCode);
+    if (!account || account.taxRate === 0) return Math.abs(transaction.amount).toFixed(2);
+    
+    const netAmount = Math.abs(transaction.amount) / (1 + account.taxRate / 100);
+    return netAmount.toFixed(2);
   }
 
   getExportStats(transactions: Transaction[]): {

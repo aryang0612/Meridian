@@ -1,96 +1,44 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  /* config options here */
   typescript: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has TypeScript errors.
     ignoreBuildErrors: false,
   },
-  
-  // Performance optimizations
-  experimental: {
-    // Optimize for development
-    optimizeCss: false,
+  eslint: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
+    ignoreDuringBuilds: true,
   },
-  
-  // Server external packages (moved from experimental)
-  serverExternalPackages: ['@prisma/client'],
-  
-  // Webpack optimizations
-  webpack: (config, { dev, isServer }) => {
-    // Development optimizations
-    if (dev) {
-      config.optimization = {
-        ...config.optimization,
-        removeAvailableModules: false,
-        removeEmptyChunks: false,
-        splitChunks: false,
-      };
-      
-      // Reduce memory usage during development
-      config.watchOptions = {
-        poll: 1000,
-        aggregateTimeout: 300,
-        ignored: ['**/node_modules/**', '**/.git/**', '**/docs/**', '**/testing/**'],
-      };
-      
-      // Disable problematic filesystem cache in development
-      config.cache = false;
-    }
-    
-    // Optimize bundle size
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@': require('path').join(__dirname, 'src'),
+  output: 'standalone',
+  // Skip static generation for error pages
+  generateBuildId: async () => {
+    return 'meridian-2.0-build'
+  },
+  // Webpack configuration for better stability
+  webpack: (config, { isServer }) => {
+    // Optimize for better chunk loading
+    config.optimization.splitChunks = {
+      ...config.optimization.splitChunks,
+      cacheGroups: {
+        default: {
+          minChunks: 2,
+          priority: -20,
+          reuseExistingChunk: true
+        },
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendors',
+          priority: -10,
+          chunks: 'all'
+        }
+      }
     };
     
     return config;
-  },
-  
-  // Image optimization
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'localhost',
-        port: '',
-        pathname: '/**',
-      }
-    ],
-    formats: ['image/webp', 'image/avif'],
-  },
-  
-  // Headers for better caching
-  async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
-          },
-        ],
-      },
-    ];
-  },
-  
-  /* config options here */
+  }
 };
 
 export default nextConfig;

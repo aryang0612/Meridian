@@ -19,26 +19,37 @@ import {
 interface ExportManagerProps {
   transactions: Transaction[];
   province?: string;
+  onTransactionsUpdate?: (transactions: Transaction[]) => void;
 }
 
-export default function ExportManagerComponent({ transactions, province = 'ON' }: ExportManagerProps) {
+export default function ExportManagerComponent({ transactions, province = 'ON', onTransactionsUpdate }: ExportManagerProps) {
   const [exportManager] = useState(() => new ExportManager(province));
   const [isExporting, setIsExporting] = useState(false);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
-    format: 'xero',
+    format: 'xero-simple',
     dateRange: {
       start: '',
       end: ''
     },
-    includeUncategorized: false,
+    includeUncategorized: true,
     includeConfidenceScores: true,
     includeAuditTrail: true,
     onlyApproved: false,
     province
   });
+
+  // Sync province prop with internal state
+  useEffect(() => {
+    if (province !== exportOptions.province) {
+      setExportOptions(prev => ({
+        ...prev,
+        province
+      }));
+    }
+  }, [province, exportOptions.province]);
 
   // Available export formats
   const availableFormats = useMemo(() => exportManager.getAvailableFormats(), [exportManager]);
@@ -120,8 +131,31 @@ export default function ExportManagerComponent({ transactions, province = 'ON' }
     }
   };
 
+  // Auto-approve all transactions
+  const handleAutoApproveAll = () => {
+    if (!onTransactionsUpdate) return;
+    
+    const updatedTransactions = transactions.map(transaction => ({
+      ...transaction,
+      isApproved: true
+    }));
+    
+    onTransactionsUpdate(updatedTransactions);
+    console.log(`✅ Auto-approved all ${transactions.length} transactions`);
+  };
+
   useEffect(() => {
-    exportManager.setProvince(exportOptions.province);
+    const updateProvince = async () => {
+      console.log(`🔄 ExportManager: Changing province to ${exportOptions.province}`);
+      try {
+        await exportManager.setProvince(exportOptions.province);
+        console.log(`✅ ExportManager: Province changed to ${exportOptions.province} and Chart of Accounts reloaded`);
+      } catch (error) {
+        console.error('❌ Error updating province in ExportManager:', error);
+      }
+    };
+
+    updateProvince();
   }, [exportOptions.province, exportManager]);
 
   return (
@@ -170,6 +204,14 @@ export default function ExportManagerComponent({ transactions, province = 'ON' }
           <p className="text-sm text-gray-500">
             {Math.round((exportStats.approvedTransactions / exportStats.totalTransactions) * 100)}% approved
           </p>
+          {onTransactionsUpdate && exportStats.approvedTransactions < exportStats.totalTransactions && (
+            <button
+              onClick={handleAutoApproveAll}
+              className="mt-3 w-full text-xs bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-3 rounded-lg transition-colors duration-200"
+            >
+              Auto-Approve All
+            </button>
+          )}
         </div>
 
         <div className="bg-white border border-purple-100 rounded-xl p-6 hover:shadow-lg transition-all duration-300 hover:border-purple-200">
@@ -235,9 +277,9 @@ export default function ExportManagerComponent({ transactions, province = 'ON' }
             <p className="text-xs text-gray-500 mt-2">
               {availableFormats.find(f => f.id === exportOptions.format)?.description}
             </p>
-            {exportOptions.format === 'xero' && (
+            {(exportOptions.format === 'xero-precoded' || exportOptions.format === 'xero-simple') && (
               <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-700">
-                <strong>✨ Xero Precoded:</strong> Includes account codes and tax calculations for direct import
+                <strong>✨ Xero Format:</strong> {exportOptions.format === 'xero-simple' ? 'Simple format for easy import' : 'Includes account codes and tax calculations for direct import'}
               </div>
             )}
             {exportOptions.format === 'xero-chart-of-accounts' && (
@@ -415,7 +457,7 @@ export default function ExportManagerComponent({ transactions, province = 'ON' }
       )}
 
       {/* Xero format guidance */}
-      {(exportOptions.format === 'xero' || exportOptions.format === 'xero-precoded') && (
+      {(exportOptions.format === 'xero-simple' || exportOptions.format === 'xero-precoded') && (
         <div className="bg-purple-50 border border-purple-200 rounded-xl p-6">
           <div className="flex items-center space-x-3 mb-4">
             <div className="bg-purple-100 p-2 rounded-lg">
@@ -424,17 +466,17 @@ export default function ExportManagerComponent({ transactions, province = 'ON' }
             <h4 className="text-sm font-bold text-purple-800">Xero Format Selected</h4>
           </div>
           <div className="text-sm text-purple-700 space-y-2">
-            {exportOptions.format === 'xero' && (
+            {exportOptions.format === 'xero-simple' && (
               <>
-                <p><strong>Standard Xero:</strong> Basic import format matching Xero&apos;s template</p>
-                <p>• Transactions will need manual coding in Xero after import</p>
-                <p>• Use this if you prefer to categorize in Xero</p>
+                <p><strong>Simple Xero:</strong> Streamlined format for easy import</p>
+                <p>• Includes account codes and tax calculations</p>
+                <p>• Faster processing for large files</p>
               </>
             )}
             {exportOptions.format === 'xero-precoded' && (
               <>
-                <p><strong>Precoded Xero:</strong> Includes account codes for automatic categorization</p>
-                <p>• Transactions will be automatically coded in Xero</p>
+                <p><strong>Precoded Xero:</strong> Full format with all fields</p>
+                <p>• Includes complete transaction details</p>
                 <p>• Requires all transactions to have account codes assigned</p>
               </>
             )}
@@ -496,12 +538,12 @@ export default function ExportManagerComponent({ transactions, province = 'ON' }
             <p><strong>Total Amount:</strong> ${exportResult.summary.totalAmount.toLocaleString('en-CA', { minimumFractionDigits: 2 })}</p>
             <p><strong>Date Range:</strong> {exportResult.summary.dateRange}</p>
             <p><strong>Generated:</strong> {new Date(exportResult.summary.generatedAt).toLocaleString()}</p>
-            {(exportOptions.format === 'xero' || exportOptions.format === 'xero-precoded') && (
+            {(exportOptions.format === 'xero-simple' || exportOptions.format === 'xero-precoded') && (
               <div className="mt-4 p-4 bg-green-100 border border-green-200 rounded-lg">
                 <p className="text-xs font-bold text-green-800">🎉 Ready for Xero!</p>
                 <p className="text-xs text-green-700 mt-1">
-                  {exportOptions.format === 'xero' 
-                    ? 'Your CSV matches Xero&apos;s template format. Import into Xero Banking for manual coding.'
+                  {exportOptions.format === 'xero-simple' 
+                    ? 'Your CSV is ready for import. Simple format for faster processing.'
                     : 'Your CSV includes account codes for automatic categorization. Import directly into Xero Banking.'
                   }
                 </p>
