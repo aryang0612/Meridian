@@ -34,6 +34,9 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
     similarTransactions: Transaction[];
     suggestedAccount: string;
   }>({ show: false, sourceTransaction: null, similarTransactions: [], suggestedAccount: '' });
+  
+  // State for tracking selected transactions in bulk modal
+  const [bulkModalSelectedTransactions, setBulkModalSelectedTransactions] = useState<Set<string>>(new Set());
 
   // Close modal on escape key and prevent body scroll
   useEffect(() => {
@@ -296,6 +299,37 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
     return filteredSimilar;
   };
 
+  // Helper function to group similar transactions by exact description matches
+  const groupSimilarTransactionsByExactMatch = (transactions: Transaction[]): { exactGroups: Transaction[][]; standaloneTransactions: Transaction[] } => {
+    const exactGroups: Transaction[][] = [];
+    const grouped = new Set<string>();
+    const standaloneTransactions: Transaction[] = [];
+    
+    transactions.forEach(transaction => {
+      if (grouped.has(transaction.id)) return;
+      
+      // Find transactions with exact description match
+      const exactMatches = transactions.filter(t => 
+        t.id !== transaction.id && 
+        !grouped.has(t.id) && 
+        t.description.trim() === transaction.description.trim()
+      );
+      
+      if (exactMatches.length > 0) {
+        // Create a group with the original transaction and its exact matches
+        const group = [transaction, ...exactMatches];
+        exactGroups.push(group);
+        group.forEach(t => grouped.add(t.id));
+      } else {
+        // Standalone transaction
+        standaloneTransactions.push(transaction);
+        grouped.add(transaction.id);
+      }
+    });
+    
+    return { exactGroups, standaloneTransactions };
+  };
+
   // Basic handlers
   const handleAccountChange = (id: string, accountCode: string) => {
     try {
@@ -319,6 +353,8 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
               similarTransactions,
               suggestedAccount: accountCode
             });
+            // Initialize all transactions as selected by default
+            setBulkModalSelectedTransactions(new Set(similarTransactions.map(t => t.id)));
           }
         }
       }
@@ -351,6 +387,8 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
           similarTransactions,
           suggestedAccount: accountCode
         });
+        // Initialize all transactions as selected by default
+        setBulkModalSelectedTransactions(new Set(similarTransactions.map(t => t.id)));
       }
     }
   };
@@ -402,25 +440,39 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
   const handleAcceptBulkCategorization = () => {
     console.log('🎯 handleAcceptBulkCategorization called');
     console.log('🎯 bulkCategorySuggestion:', bulkCategorySuggestion);
+    console.log('🎯 Selected transactions:', bulkModalSelectedTransactions);
+    
     try {
-      if (bulkCategorySuggestion.similarTransactions.length > 0) {
-        const updates = bulkCategorySuggestion.similarTransactions.map(t => ({
+      // Use selected transactions if any are selected, otherwise use all similar transactions
+      const transactionsToUpdate = bulkModalSelectedTransactions.size > 0 
+        ? bulkCategorySuggestion.similarTransactions.filter(t => bulkModalSelectedTransactions.has(t.id))
+        : bulkCategorySuggestion.similarTransactions;
+        
+      if (transactionsToUpdate.length > 0) {
+        const updates = transactionsToUpdate.map(t => ({
           id: t.id,
           accountCode: bulkCategorySuggestion.suggestedAccount
         }));
         console.log('🎯 Updates to be applied:', updates);
         handleBulkUpdate(updates);
-        setNotification(`Applied ${getAccountName(bulkCategorySuggestion.suggestedAccount)} to ${updates.length} similar transactions`);
+        
+        const updateCount = updates.length;
+        const totalCount = bulkCategorySuggestion.similarTransactions.length;
+        const message = updateCount === totalCount 
+          ? `Applied ${getAccountName(bulkCategorySuggestion.suggestedAccount)} to ${updateCount} similar transactions`
+          : `Applied ${getAccountName(bulkCategorySuggestion.suggestedAccount)} to ${updateCount} of ${totalCount} selected transactions`;
+        setNotification(message);
       } else {
-        console.log('🎯 No similar transactions found to update');
-        setNotification('No similar transactions found to update');
+        console.log('🎯 No transactions selected to update');
+        setNotification('No transactions selected to update');
       }
     } catch (error) {
       console.error('Error in bulk categorization:', error);
       setNotification('Error applying bulk categorization');
     } finally {
-      // Always close the modal
+      // Always close the modal and clear selection
       setBulkCategorySuggestion({ show: false, sourceTransaction: null, similarTransactions: [], suggestedAccount: '' });
+      setBulkModalSelectedTransactions(new Set());
       document.body.style.overflow = 'unset'; // Ensure scroll is restored
     }
   };
@@ -428,6 +480,7 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
   const handleRejectBulkCategorization = () => {
     console.log('🔄 Closing bulk categorization modal');
     setBulkCategorySuggestion({ show: false, sourceTransaction: null, similarTransactions: [], suggestedAccount: '' });
+    setBulkModalSelectedTransactions(new Set());
     document.body.style.overflow = 'unset'; // Ensure scroll is restored
   };
 
@@ -1356,23 +1409,144 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
               </div>
             </div>
 
-            {/* Similar Transactions */}
-            <div className="p-6 max-h-60 overflow-y-auto">
-              <h3 className="text-sm font-medium text-slate-800 mb-3">Similar Transactions</h3>
-              <div className="space-y-2">
-                {bulkCategorySuggestion.similarTransactions.map((transaction) => (
-                  <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                    <span className="text-sm text-slate-700 truncate">{transaction.description}</span>
-                    <span className="text-sm font-semibold text-slate-600">
-                      ${Math.abs(transaction.amount).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
+            {/* Enhanced Similar Transactions with Grouping */}
+            <div className="p-6 max-h-96 overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-slate-800">Similar Transactions</h3>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => setBulkModalSelectedTransactions(new Set(bulkCategorySuggestion.similarTransactions.map(t => t.id)))}
+                    className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={() => setBulkModalSelectedTransactions(new Set())}
+                    className="text-xs text-slate-500 hover:text-slate-600 font-medium"
+                  >
+                    Clear All
+                  </button>
+                </div>
               </div>
+              
+              {(() => {
+                const { exactGroups, standaloneTransactions } = groupSimilarTransactionsByExactMatch(bulkCategorySuggestion.similarTransactions);
+                
+                return (
+                  <div className="space-y-3">
+                    {/* Exact Match Groups */}
+                    {exactGroups.map((group, groupIndex) => (
+                      <div key={`group-${groupIndex}`} className="border border-slate-200 rounded-lg">
+                        <div className="bg-blue-50 p-3 border-b border-slate-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={group.every(t => bulkModalSelectedTransactions.has(t.id))}
+                                onChange={(e) => {
+                                  const newSelected = new Set(bulkModalSelectedTransactions);
+                                  if (e.target.checked) {
+                                    group.forEach(t => newSelected.add(t.id));
+                                  } else {
+                                    group.forEach(t => newSelected.delete(t.id));
+                                  }
+                                  setBulkModalSelectedTransactions(newSelected);
+                                }}
+                                className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                              />
+                              <span className="text-sm font-medium text-blue-800">
+                                Exact Match Group ({group.length} transactions)
+                              </span>
+                            </div>
+                            <span className="text-xs text-blue-600 font-medium">
+                              Total: ${Math.abs(group.reduce((sum, t) => sum + t.amount, 0)).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="text-xs text-blue-700 mt-1 truncate">
+                            {group[0].description}
+                          </div>
+                        </div>
+                        <div className="p-3 space-y-2">
+                          {group.map((transaction) => (
+                            <div key={transaction.id} className="flex items-center space-x-3 p-2 bg-slate-50 rounded">
+                              <input
+                                type="checkbox"
+                                checked={bulkModalSelectedTransactions.has(transaction.id)}
+                                onChange={(e) => {
+                                  const newSelected = new Set(bulkModalSelectedTransactions);
+                                  if (e.target.checked) {
+                                    newSelected.add(transaction.id);
+                                  } else {
+                                    newSelected.delete(transaction.id);
+                                  }
+                                  setBulkModalSelectedTransactions(newSelected);
+                                }}
+                                className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs text-slate-500">
+                                  {new Date(transaction.date).toLocaleDateString()}
+                                </div>
+                              </div>
+                              <span className="text-sm font-semibold text-slate-600">
+                                ${Math.abs(transaction.amount).toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* Standalone Transactions */}
+                    {standaloneTransactions.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium text-slate-600 mb-2">
+                          Similar Transactions
+                        </div>
+                        {standaloneTransactions.map((transaction) => (
+                          <div key={transaction.id} className="flex items-center space-x-3 p-3 bg-slate-50 rounded-lg">
+                            <input
+                              type="checkbox"
+                              checked={bulkModalSelectedTransactions.has(transaction.id)}
+                              onChange={(e) => {
+                                const newSelected = new Set(bulkModalSelectedTransactions);
+                                if (e.target.checked) {
+                                  newSelected.add(transaction.id);
+                                } else {
+                                  newSelected.delete(transaction.id);
+                                }
+                                setBulkModalSelectedTransactions(newSelected);
+                              }}
+                              className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-slate-700 truncate">{transaction.description}</div>
+                              <div className="text-xs text-slate-500">
+                                {new Date(transaction.date).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <span className="text-sm font-semibold text-slate-600">
+                              ${Math.abs(transaction.amount).toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
-            {/* Actions */}
+            {/* Enhanced Actions */}
             <div className="p-6 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm text-slate-600">
+                  {bulkModalSelectedTransactions.size} of {bulkCategorySuggestion.similarTransactions.length} selected
+                </span>
+                <span className="text-xs text-slate-500">
+                  Category: {getAccountName(bulkCategorySuggestion.suggestedAccount)}
+                </span>
+              </div>
               <div className="flex gap-3">
                 <button
                   onClick={handleRejectBulkCategorization}
@@ -1382,9 +1556,21 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
                 </button>
                 <button
                   onClick={handleAcceptBulkCategorization}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  disabled={bulkModalSelectedTransactions.size === 0}
+                  className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+                    bulkModalSelectedTransactions.size === 0
+                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                      : bulkModalSelectedTransactions.size === bulkCategorySuggestion.similarTransactions.length
+                      ? 'bg-purple-600 text-white hover:bg-purple-700'
+                      : 'bg-purple-600 text-white hover:bg-purple-700'
+                  }`}
                 >
-                  Yes, Apply to All
+                  {bulkModalSelectedTransactions.size === 0
+                    ? 'Select Transactions'
+                    : bulkModalSelectedTransactions.size === bulkCategorySuggestion.similarTransactions.length
+                    ? 'Yes, Apply to All'
+                    : `Yes, Apply to Selected (${bulkModalSelectedTransactions.size})`
+                  }
                 </button>
               </div>
             </div>
