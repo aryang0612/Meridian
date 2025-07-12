@@ -4,8 +4,10 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction } from '../lib/types';
 import { ChartOfAccounts } from '../lib/chartOfAccounts';
 import { AIEngine } from '../lib/aiEngine';
+import { UnifiedCategorizationEngine } from '../lib/unifiedCategorizationEngine';
 import BulkCategorySelector from './BulkCategorySelector';
 import AICategorizationButton from './AICategorizationButton';
+import SaveRulePopup from './SaveRulePopup';
 
 import { AppIcons, CommonIcons, IconSizes } from '../lib/iconSystem';
 
@@ -43,6 +45,12 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
 
   // Force re-render when Chart of Accounts is updated
   const [chartUpdateTrigger, setChartUpdateTrigger] = useState(0);
+
+  // State for Save Rule Popup
+  const [saveRulePopup, setSaveRulePopup] = useState<{
+    isOpen: boolean;
+    transaction: { id: string; description: string; accountCode: string; } | null;
+  }>({ isOpen: false, transaction: null });
 
   // Sorting state
   const [sortField, setSortField] = useState<'date' | 'description' | 'amount' | 'account' | 'confidence' | null>(null);
@@ -390,6 +398,31 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
     return { exactGroups, standaloneTransactions };
   };
 
+  // Show save rule popup
+  const showSaveRulePopup = (transaction: Transaction, accountCode: string) => {
+    setSaveRulePopup({
+      isOpen: true,
+      transaction: {
+        id: transaction.id,
+        description: transaction.description,
+        accountCode: accountCode
+      }
+    });
+  };
+
+  // Handle saving user categorization rule
+  const handleSaveRule = async (keyword: string, accountCode: string, matchType: 'contains' | 'fuzzy' | 'regex' | 'exact') => {
+    try {
+      const unifiedEngine = UnifiedCategorizationEngine.getInstance(province);
+      await unifiedEngine.saveUserRule(keyword, accountCode, matchType);
+      setNotification(`✅ Rule saved! Future transactions containing "${keyword}" will be categorized to ${getAccountName(accountCode)}`);
+      setSaveRulePopup({ isOpen: false, transaction: null });
+    } catch (error) {
+      console.error('Failed to save rule:', error);
+      setNotification('❌ Failed to save rule. Please try again.');
+    }
+  };
+
   // Enhanced handlers for bulk changes in grouped view
   const handleAccountChange = (id: string, accountCode: string) => {
     try {
@@ -429,6 +462,17 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
       // Single transaction update (original behavior)
       onTransactionUpdate(id, { accountCode });
       setManualProgress(prev => ({ ...prev, recentlyUpdated: new Set([...prev.recentlyUpdated, id]) }));
+
+      // Show save rule popup for manual categorizations (not when clearing)
+      if (accountCode) {
+        const sourceTransaction = transactions.find(t => t.id === id);
+        if (sourceTransaction) {
+          // Small delay to ensure the transaction update is processed first
+          setTimeout(() => {
+            showSaveRulePopup(sourceTransaction, accountCode);
+          }, 100);
+        }
+      }
         
       // Show bulk categorization suggestion if account is being set (not cleared)
       if (accountCode) {
@@ -464,8 +508,15 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
     onTransactionUpdate(transactionId, { accountCode, confidence });
     setNotification(`AI categorized transaction to ${getAccountName(accountCode)}`);
     
-    // Show bulk categorization suggestion for AI categorization as well
+    // Show save rule popup for AI categorizations too
     const sourceTransaction = transactions.find(t => t.id === transactionId);
+    if (sourceTransaction) {
+      setTimeout(() => {
+        showSaveRulePopup(sourceTransaction, accountCode);
+      }, 100);
+    }
+    
+    // Show bulk categorization suggestion for AI categorization as well
     if (sourceTransaction) {
       const similarTransactions = findSimilarTransactions(sourceTransaction);
       if (similarTransactions.length > 0) {
@@ -1889,6 +1940,16 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
         </div>
       )}
 
+      {/* Save Rule Popup */}
+      {saveRulePopup.transaction && (
+        <SaveRulePopup
+          isOpen={saveRulePopup.isOpen}
+          transaction={saveRulePopup.transaction}
+          onSave={handleSaveRule}
+          onCancel={() => setSaveRulePopup({ isOpen: false, transaction: null })}
+          chartOfAccounts={chartOfAccounts}
+        />
+      )}
 
     </div>
   );

@@ -1,4 +1,4 @@
-import { Transaction } from './types';
+import { Transaction, UserCategorizationRule } from './types';
 import { ChartOfAccounts } from './chartOfAccounts';
 import { DatabaseService } from './databaseService';
 import { categorizationCache, patternCache, CacheUtils, performanceTracker } from './performanceOptimizer';
@@ -14,7 +14,7 @@ export interface CategorizationResult {
   accountCode: string;
   confidence: number;
   reasoning: string;
-  source: 'pattern' | 'learned' | 'keyword' | 'chatgpt' | 'fallback';
+  source: 'pattern' | 'learned' | 'keyword' | 'chatgpt' | 'fallback' | 'user_rule';
   merchant?: string;
   inflowOutflow: 'inflow' | 'outflow';
   suggestedKeyword?: string;
@@ -44,6 +44,7 @@ export interface CategorizationPattern {
 export class UnifiedCategorizationEngine {
   private static instance: UnifiedCategorizationEngine | null = null;
   private patterns: CategorizationPattern[] = [];
+  private userRules: UserCategorizationRule[] = [];
   private chartOfAccounts: ChartOfAccounts;
   private databaseService: DatabaseService;
   private fuse: Fuse<any> | null = null;
@@ -79,6 +80,7 @@ export class UnifiedCategorizationEngine {
       await this.chartOfAccounts.waitForInitialization();
       
       // Load all patterns from different sources
+      await this.loadUserRules();          // HIGHEST PRIORITY - User's personal rules
       await this.loadSystemPatterns();
       await this.loadLearnedPatterns();
       // Note: Custom keywords are now integrated into the training data patterns
@@ -125,7 +127,15 @@ export class UnifiedCategorizationEngine {
         return this.buildResult(cached, 'cached');
       }
 
-      // 1. Try pattern matching (all patterns sorted by priority)
+      // 1. FIRST: Check user's personal categorization rules
+      const userRuleResult = await this.tryUserRules(transaction);
+      if (userRuleResult && userRuleResult.confidence >= 95) {
+        this.cacheResult(cacheKey, userRuleResult);
+        stopTimer();
+        return userRuleResult;
+      }
+
+      // 2. Try pattern matching (all patterns sorted by priority)
       const patternResult = await this.tryPatternMatching(transaction);
       if (patternResult && patternResult.confidence >= 85) {
         this.cacheResult(cacheKey, patternResult);
@@ -4220,6 +4230,104 @@ ANALYZE THIS TRANSACTION NOW:`;
       byCategory,
       bySource
     };
+  }
+
+  // =============================================================================
+  // USER CATEGORIZATION RULES METHODS
+  // =============================================================================
+
+  private async loadUserRules(): Promise<void> {
+    try {
+      if (!this.userId) {
+        console.log('No user ID, skipping user rules loading');
+        return;
+      }
+
+      const rules = await this.databaseService.getUserCategorizationRules();
+      this.userRules = rules;
+      
+      console.log(`✅ Loaded ${rules.length} user categorization rules`);
+    } catch (error) {
+      console.error('Failed to load user categorization rules:', error);
+      this.userRules = [];
+    }
+  }
+
+  private async tryUserRules(transaction: Transaction): Promise<CategorizationResult | null> {
+    if (this.userRules.length === 0) {
+      return null;
+    }
+
+    const description = transaction.description?.toLowerCase() || '';
+    
+    // Check each user rule
+    for (const rule of this.userRules) {
+      if (!rule.is_active) continue;
+      
+      let matches = false;
+      
+      switch (rule.match_type) {
+        case 'exact':
+          matches = description === rule.keyword.toLowerCase();
+          break;
+        case 'contains':
+          matches = description.includes(rule.keyword.toLowerCase());
+          break;
+        case 'fuzzy':
+          // Simple fuzzy matching - check if description contains most words from keyword
+          const keywordWords = rule.keyword.toLowerCase().split(/\s+/);
+          const matchedWords = keywordWords.filter(word => description.includes(word));
+          matches = matchedWords.length >= Math.ceil(keywordWords.length * 0.7);
+          break;
+        case 'regex':
+          try {
+            const regex = new RegExp(rule.keyword, 'i');
+            matches = regex.test(description);
+          } catch (e) {
+            console.warn(`Invalid regex in user rule: ${rule.keyword}`);
+            continue;
+          }
+          break;
+      }
+      
+      if (matches) {
+        // Update rule usage
+        try {
+          await this.databaseService.updateRuleUsage(rule.id);
+        } catch (error) {
+          console.warn('Failed to update rule usage:', error);
+        }
+        
+        const inflowOutflow = this.getInflowOutflow(transaction, rule.category_code);
+        
+        return {
+          category: 'User Rule',
+          accountCode: rule.category_code,
+          confidence: 98, // High confidence for user-defined rules
+          reasoning: `Matched user rule: "${rule.keyword}" (${rule.match_type} match)`,
+          source: 'user_rule' as any,
+          merchant: rule.keyword,
+          inflowOutflow,
+          suggestedKeyword: rule.keyword
+        };
+      }
+    }
+    
+    return null;
+  }
+
+  async saveUserRule(keyword: string, categoryCode: string, matchType: 'contains' | 'fuzzy' | 'regex' | 'exact' = 'contains'): Promise<void> {
+    try {
+      await this.databaseService.saveUserCategorizationRule(keyword, categoryCode, matchType);
+      
+      // Reload user rules to include the new one
+      await this.loadUserRules();
+      
+      console.log('✅ User rule saved and rules reloaded');
+    } catch (error) {
+      console.error('Failed to save user rule:', error);
+      throw error;
+    }
   }
 }
 

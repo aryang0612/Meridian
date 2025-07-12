@@ -1,4 +1,5 @@
 import { getSupabaseClient, getCurrentUser, LearnedPattern, UserCorrection, isSupabaseEnabled } from './supabase';
+import { UserCategorizationRule } from './types';
 
 export class DatabaseService {
   private static instance: DatabaseService;
@@ -328,6 +329,205 @@ export class DatabaseService {
       console.log('✅ All user data cleared successfully');
     } catch (error) {
       console.error('❌ Failed to clear user data:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // USER CATEGORIZATION RULES METHODS
+  // ============================================================================
+
+  async saveUserCategorizationRule(
+    keyword: string, 
+    categoryCode: string, 
+    matchType: 'contains' | 'fuzzy' | 'regex' | 'exact' = 'contains'
+  ): Promise<void> {
+    try {
+      const supabase = getSupabaseClient();
+      
+      if (!supabase || !isSupabaseEnabled()) {
+        console.warn('⚠️ Supabase not available, rules feature requires database connection');
+        return;
+      }
+
+      const user = await getCurrentUser();
+      
+      if (!user) {
+        console.warn('⚠️ No authenticated user, cannot save categorization rule');
+        return;
+      }
+
+      // First check if rule already exists
+      const { data: existingRule, error: fetchError } = await supabase
+        .from('user_categorization_rules')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('keyword', keyword.toLowerCase())
+        .eq('category_code', categoryCode)
+        .eq('match_type', matchType)
+        .eq('is_active', true)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('Error checking existing rule:', fetchError);
+        throw fetchError;
+      }
+
+      if (existingRule) {
+        // Update existing rule - increment usage count
+        const { error: updateError } = await supabase
+          .from('user_categorization_rules')
+          .update({
+            usage_count: existingRule.usage_count + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingRule.id);
+
+        if (updateError) {
+          console.error('Error updating existing rule:', updateError);
+          throw updateError;
+        }
+
+        console.log('✅ Updated existing categorization rule usage count');
+      } else {
+        // Create new rule
+        const { error: insertError } = await supabase
+          .from('user_categorization_rules')
+          .insert({
+            user_id: user.id,
+            keyword: keyword.toLowerCase(),
+            category_code: categoryCode,
+            match_type: matchType,
+            usage_count: 1,
+            is_active: true
+          });
+
+        if (insertError) {
+          console.error('Error creating new rule:', insertError);
+          throw insertError;
+        }
+
+        console.log('✅ Created new categorization rule successfully');
+      }
+    } catch (error) {
+      console.error('❌ Failed to save user categorization rule:', error);
+      throw error;
+    }
+  }
+
+  async getUserCategorizationRules(): Promise<UserCategorizationRule[]> {
+    try {
+      const supabase = getSupabaseClient();
+      
+      if (!supabase || !isSupabaseEnabled()) {
+        console.warn('⚠️ Supabase not available, returning empty rules array');
+        return [];
+      }
+
+      const user = await getCurrentUser();
+      
+      if (!user) {
+        console.warn('⚠️ No authenticated user, returning empty rules array');
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from('user_categorization_rules')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('usage_count', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching user categorization rules:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch user categorization rules:', error);
+      return [];
+    }
+  }
+
+  async updateRuleUsage(ruleId: string): Promise<void> {
+    try {
+      const supabase = getSupabaseClient();
+      
+      if (!supabase || !isSupabaseEnabled()) {
+        return;
+      }
+
+      const user = await getCurrentUser();
+      
+      if (!user) {
+        return;
+      }
+
+      // Get current usage count and increment
+      const { data: currentRule, error: fetchError } = await supabase
+        .from('user_categorization_rules')
+        .select('usage_count')
+        .eq('id', ruleId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching rule for usage update:', fetchError);
+        return;
+      }
+
+      const { error } = await supabase
+        .from('user_categorization_rules')
+        .update({
+          usage_count: (currentRule?.usage_count || 0) + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', ruleId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error updating rule usage:', error);
+      }
+    } catch (error) {
+      console.error('❌ Failed to update rule usage:', error);
+    }
+  }
+
+  async deleteCategorizationRule(ruleId: string): Promise<void> {
+    try {
+      const supabase = getSupabaseClient();
+      
+      if (!supabase || !isSupabaseEnabled()) {
+        console.warn('⚠️ Supabase not available, cannot delete rule');
+        return;
+      }
+
+      const user = await getCurrentUser();
+      
+      if (!user) {
+        console.warn('⚠️ No authenticated user, cannot delete rule');
+        return;
+      }
+
+      // Soft delete by setting is_active to false
+      const { error } = await supabase
+        .from('user_categorization_rules')
+        .update({
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', ruleId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error deleting categorization rule:', error);
+        throw error;
+      }
+
+      console.log('✅ Categorization rule deleted successfully');
+    } catch (error) {
+      console.error('❌ Failed to delete categorization rule:', error);
       throw error;
     }
   }

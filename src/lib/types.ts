@@ -114,4 +114,36 @@ export interface CategorizationResult {
   category: string;
   confidence: number;
   reasoning: string;
+}
+
+export interface UserCorrection {
+  id: string;
+  user_id: string;
+  original_description: string;
+  corrected_category_code: string;
+  created_at: string;
+}
+
+export interface UserCategorizationRule {
+  id: string;
+  user_id: string;
+  match_type: 'contains' | 'fuzzy' | 'regex' | 'exact';
+  keyword: string;
+  category_code: string;
+  created_at: string;
+  updated_at: string;
+  usage_count: number;
+  is_active: boolean;
+}
+
+export interface LearnedPattern {
+  id: string;
+  user_id: string;
+  pattern: string;
+  category_code: string;
+  confidence: number;
+  usage_count: number;
+  last_used: string;
+  created_at: string;
+  updated_at: string;
 } 
