@@ -71,11 +71,18 @@ const TransactionTableRow: React.FC<TransactionTableRowProps> = ({
             <div className="font-medium text-slate-900 line-clamp-2">
               {transaction.description}
             </div>
-            {transaction.merchant && (
-              <div className="text-xs text-slate-500 mt-1">
-                {transaction.merchant}
-              </div>
-            )}
+            <div className="flex items-center space-x-2 mt-1">
+              {transaction.merchant && (
+                <div className="text-xs text-slate-500">
+                  {transaction.merchant}
+                </div>
+              )}
+              {transaction.source && (
+                <div className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                  📄 {transaction.source}
+                </div>
+              )}
+            </div>
           </div>
           {(isETransfer || isBillPayment) && (
             <div className="flex-shrink-0">
@@ -116,11 +123,10 @@ const TransactionTableRow: React.FC<TransactionTableRowProps> = ({
         ) : !transaction.accountCode ? (
           (isETransfer || transaction.description.toLowerCase().includes('cheque')) ? (
             <button
-              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-yellow-50 text-yellow-800 border-2 border-dotted border-yellow-300 hover:bg-yellow-100 transition-colors"
               onClick={() => onEdit(transaction.id, 'account')}
             >
-              <AppIcons.status.warning className="w-3 h-3 mr-1" />
-              Manual Entry
+              Manual categorization needed
             </button>
           ) : (
             <button

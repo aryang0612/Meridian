@@ -20,6 +20,8 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
   const [notification, setNotification] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'needs-review' | 'high-confidence'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [descriptionFilter, setDescriptionFilter] = useState('');
+  const [showDescriptionFilter, setShowDescriptionFilter] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showSmartSelect, setShowSmartSelect] = useState(false);
@@ -37,34 +39,53 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
   
   // State for tracking selected transactions in bulk modal
   const [bulkModalSelectedTransactions, setBulkModalSelectedTransactions] = useState<Set<string>>(new Set());
+  
+  // State for tracking which transaction is having its account changed in grouped view
+  const [changingAccountId, setChangingAccountId] = useState<string | null>(null);
 
-  // Close modal on escape key and prevent body scroll
+  // Force re-render when Chart of Accounts is updated
+  const [chartUpdateTrigger, setChartUpdateTrigger] = useState(0);
+
+  // Close modal on escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && bulkCategorySuggestion.show) {
         handleRejectBulkCategorization();
+      }
+      if (e.key === 'Escape' && changingAccountId) {
+        setChangingAccountId(null);
       }
     };
     
     if (bulkCategorySuggestion.show) {
       console.log('🔍 Modal is showing, state:', bulkCategorySuggestion);
       document.addEventListener('keydown', handleEscape);
-      document.body.classList.add('modal-open'); // Prevent background scroll
       return () => {
         document.removeEventListener('keydown', handleEscape);
-        document.body.classList.remove('modal-open'); // Restore scroll
       };
     } else {
       console.log('🔍 Modal is hidden');
     }
-  }, [bulkCategorySuggestion.show]);
-
-  // Cleanup on unmount
+  }, [bulkCategorySuggestion.show, changingAccountId]);
+  
+  // Close account change dropdown when clicking outside
   useEffect(() => {
-    return () => {
-      document.body.style.overflow = 'unset';
+    const handleClickOutside = (event: MouseEvent) => {
+      if (changingAccountId && !(event.target as Element).closest('.account-dropdown')) {
+        setChangingAccountId(null);
+      }
+      if (showDescriptionFilter && !(event.target as Element).closest('.description-filter')) {
+        setShowDescriptionFilter(false);
+      }
     };
-  }, []);
+    
+    if (changingAccountId || showDescriptionFilter) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [changingAccountId, showDescriptionFilter]);
+
+
 
   // Use singleton Chart of Accounts instance
   const chartOfAccounts = useMemo(() => ChartOfAccounts.getInstance(province), [province]);
@@ -143,6 +164,13 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
       );
     }
 
+    // Apply description filter
+    if (descriptionFilter) {
+      filtered = filtered.filter(transaction => 
+        transaction.description.toLowerCase().includes(descriptionFilter.toLowerCase())
+      );
+    }
+
     // Apply status filter
     if (filter === 'needs-review') {
       filtered = filtered.filter(t => !t.accountCode || (t.confidence || 0) < 70);
@@ -151,7 +179,7 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
     }
 
     return filtered;
-  }, [transactions, searchTerm, filter]);
+  }, [transactions, searchTerm, descriptionFilter, filter]);
 
   // Simple grouped transactions
   const groupedTransactions = useMemo(() => {
@@ -173,46 +201,39 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
     return account?.name || 'Uncategorized';
   };
 
-  // Helper function to get tax rate from account
-  const getTaxRate = (accountCode: string | undefined): number | undefined => {
-    if (!accountCode) return undefined;
+  // Memoized helper function to get tax rate from account
+  const getTaxRate = useMemo(() => {
+    const cache = new Map<string, number | undefined>();
     
-    // Debug the Chart of Accounts state
-    const currentProvince = chartOfAccounts.getProvince();
-    const isReady = chartOfAccounts.isReady();
-    
-    console.log(`💰 Tax rate lookup for account ${accountCode}:`, {
-      accountCode,
-      currentProvince,
-      chartOfAccountsReady: isReady,
-      accountsLoaded: chartOfAccounts.getAllAccounts().length
-    });
-    
-    const account = chartOfAccounts.getAccount(accountCode);
-    if (!account || !account.taxCode) {
-      console.log(`❌ No account or tax code found for ${accountCode}`);
-      return undefined;
-    }
-    
-    // Extract percentage from tax code (e.g., "ON - HST on Sales (13%)" -> 13)
-    const match = account.taxCode.match(/\((\d+(?:\.\d+)?)%\)/);
-    const taxRate = match ? parseFloat(match[1]) : undefined;
-    
-    // Enhanced debug logging to see what's happening
-    console.log(`💰 Tax rate calculation for ${accountCode}:`, {
-      accountName: account.name,
-      taxCode: account.taxCode,
-      extractedTaxRate: taxRate,
-      province: currentProvince,
-      isReady
-    });
-    
-    return taxRate;
-  };
+    return (accountCode: string | undefined): number | undefined => {
+      if (!accountCode) return undefined;
+      
+      // Return cached value if available
+      if (cache.has(accountCode)) {
+        return cache.get(accountCode);
+      }
+      
+      // Only check if chart of accounts is ready
+      if (!chartOfAccounts.isReady()) {
+        return undefined;
+      }
+      
+      const account = chartOfAccounts.getAccount(accountCode);
+      if (!account || !account.taxCode) {
+        cache.set(accountCode, undefined);
+        return undefined;
+      }
+      
+      // Extract percentage from tax code (e.g., "ON - HST on Sales (13%)" -> 13)
+      const match = account.taxCode.match(/\((\d+(?:\.\d+)?)%\)/);
+      const taxRate = match ? parseFloat(match[1]) : undefined;
+      
+      // Cache the result
+      cache.set(accountCode, taxRate);
+      return taxRate;
+    };
+  }, [chartOfAccounts, chartUpdateTrigger]);
 
-  // Force re-render when Chart of Accounts is updated
-  const [chartUpdateTrigger, setChartUpdateTrigger] = useState(0);
-  
   useEffect(() => {
     // Trigger re-render when Chart of Accounts is ready
     if (!isLoadingAccounts && chartOfAccounts.isReady()) {
@@ -333,8 +354,8 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
   // Basic handlers
   const handleAccountChange = (id: string, accountCode: string) => {
     try {
-      onTransactionUpdate(id, { accountCode });
-      setManualProgress(prev => ({ ...prev, recentlyUpdated: new Set([...prev.recentlyUpdated, id]) }));
+    onTransactionUpdate(id, { accountCode });
+    setManualProgress(prev => ({ ...prev, recentlyUpdated: new Set([...prev.recentlyUpdated, id]) }));
       
       // Show bulk categorization suggestion if account is being set (not cleared)
       if (accountCode) {
@@ -465,8 +486,8 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
       } else {
         console.log('🎯 No transactions selected to update');
         setNotification('No transactions selected to update');
-      }
-    } catch (error) {
+        }
+      } catch (error) {
       console.error('Error in bulk categorization:', error);
       setNotification('Error applying bulk categorization');
     } finally {
@@ -513,6 +534,27 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
       setSelectedTransactions(new Set());
       setShowBulkActions(false);
     }
+  };
+
+  // Handle select all for a specific group
+  const handleGroupSelectAll = (accountCode: string, checked: boolean) => {
+    const groupTransactions = groupedTransactions[accountCode] || [];
+    const newSelected = new Set(selectedTransactions);
+    
+    if (checked) {
+      groupTransactions.forEach(t => newSelected.add(t.id));
+    } else {
+      groupTransactions.forEach(t => newSelected.delete(t.id));
+    }
+    
+    setSelectedTransactions(newSelected);
+    setShowBulkActions(newSelected.size > 0);
+  };
+
+  // Handle uncategorizing a transaction
+  const handleUncategorize = (transactionId: string) => {
+    onTransactionUpdate(transactionId, { accountCode: '', confidence: 0 });
+    setNotification('Transaction uncategorized');
   };
 
   // Notification Toast Component
@@ -1034,7 +1076,41 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
                     Date
                   </th>
                   <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
-                    Description
+                    <div className="flex items-center space-x-2 description-filter">
+                      <span>Description</span>
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowDescriptionFilter(!showDescriptionFilter)}
+                          className="p-1 hover:bg-slate-100 rounded transition-colors"
+                          title="Filter by description"
+                        >
+                          <svg className="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {showDescriptionFilter && (
+                          <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+                            <div className="p-3">
+                              <input
+                                type="text"
+                                value={descriptionFilter}
+                                onChange={(e) => setDescriptionFilter(e.target.value)}
+                                placeholder="Filter by description..."
+                                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500 text-sm"
+                              />
+                              {descriptionFilter && (
+                                <button
+                                  onClick={() => setDescriptionFilter('')}
+                                  className="mt-2 px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors"
+                                >
+                                  Clear filter
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </th>
                   <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
                     Amount
@@ -1198,21 +1274,37 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
         <div className="space-y-4">
           {Object.entries(groupedTransactions).map(([accountCode, groupTransactions]) => (
             <div key={accountCode} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-              <div 
-                className="bg-gradient-to-r from-slate-50 to-slate-25 px-6 py-4 border-b border-slate-100 cursor-pointer"
-                onClick={() => toggleGroup(accountCode)}
-              >
+              <div className="bg-gradient-to-r from-slate-50 to-slate-25 px-6 py-4 border-b border-slate-100">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900">
-                      {getAccountName(accountCode)} ({accountCode || 'None'})
-                    </h3>
-                    <p className="text-sm text-slate-600">
-                      {groupTransactions.length} transactions • Total: $
-                      {Math.abs(groupTransactions.reduce((sum, t) => sum + t.amount, 0)).toFixed(2)}
-                    </p>
+                  <div className="flex items-center space-x-4">
+                    {/* Group Select All Checkbox */}
+                    <input
+                      type="checkbox"
+                      checked={groupTransactions.every(t => selectedTransactions.has(t.id))}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleGroupSelectAll(accountCode, e.target.checked);
+                      }}
+                      className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      title="Select all transactions in this group"
+                    />
+                    <div 
+                      className="cursor-pointer flex-1"
+                      onClick={() => toggleGroup(accountCode)}
+                    >
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        {getAccountName(accountCode)} ({accountCode || 'None'})
+                      </h3>
+                      <p className="text-sm text-slate-600">
+                        {groupTransactions.length} transactions • Total: $
+                        {Math.abs(groupTransactions.reduce((sum, t) => sum + t.amount, 0)).toFixed(2)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-slate-600">
+                  <div 
+                    className="text-slate-600 cursor-pointer p-2"
+                    onClick={() => toggleGroup(accountCode)}
+                  >
                     {expandedGroups.has(accountCode) ? '▼' : '▶'}
                   </div>
                 </div>
@@ -1286,15 +1378,33 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
                               onSelect={(accountCode) => handleAccountChange(transaction.id, accountCode)}
                               placeholder="Select account..."
                             />
+                          ) : changingAccountId === transaction.id ? (
+                            <div className="account-dropdown">
+                              <SearchableAccountDropdown
+                                currentValue={transaction.accountCode}
+                                onSelect={(accountCode) => {
+                                  handleAccountChange(transaction.id, accountCode);
+                                  setChangingAccountId(null);
+                                }}
+                                placeholder="Select account..."
+                              />
+                            </div>
                           ) : (
                             <div className="flex items-center space-x-2">
                               <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
                                 {getAccountName(transaction.accountCode)}
                               </span>
                               <button
-                                onClick={() => handleAccountChange(transaction.id, '')}
-                                className="text-slate-400 hover:text-slate-600 transition-colors text-xs"
-                                title="Clear account"
+                                onClick={() => setChangingAccountId(transaction.id)}
+                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors rounded"
+                                title="Change account"
+                              >
+                                Change
+                              </button>
+                              <button
+                                onClick={() => handleUncategorize(transaction.id)}
+                                className="px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200 transition-colors rounded"
+                                title="Uncategorize transaction"
                               >
                                 ×
                               </button>
@@ -1528,10 +1638,10 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
                             <span className="text-sm font-semibold text-slate-600">
                               ${Math.abs(transaction.amount).toFixed(2)}
                             </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+            </div>
+          ))}
+        </div>
+      )}
                   </div>
                 );
               })()}
