@@ -20,8 +20,6 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
   const [notification, setNotification] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'needs-review' | 'high-confidence'>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [descriptionFilter, setDescriptionFilter] = useState('');
-  const [showDescriptionFilter, setShowDescriptionFilter] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showSmartSelect, setShowSmartSelect] = useState(false);
@@ -45,6 +43,10 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
 
   // Force re-render when Chart of Accounts is updated
   const [chartUpdateTrigger, setChartUpdateTrigger] = useState(0);
+
+  // Sorting state
+  const [sortField, setSortField] = useState<'date' | 'description' | 'amount' | 'account' | 'confidence' | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Close modal on escape key
   useEffect(() => {
@@ -74,16 +76,13 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
       if (changingAccountId && !(event.target as Element).closest('.account-dropdown')) {
         setChangingAccountId(null);
       }
-      if (showDescriptionFilter && !(event.target as Element).closest('.description-filter')) {
-        setShowDescriptionFilter(false);
-      }
     };
     
-    if (changingAccountId || showDescriptionFilter) {
+    if (changingAccountId) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [changingAccountId, showDescriptionFilter]);
+  }, [changingAccountId]);
 
 
 
@@ -153,7 +152,17 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
     return chartOfAccounts.getAllAccounts();
   }, [chartOfAccounts, isLoadingAccounts]);
 
-  // Simple filtered transactions
+  // Handle sorting function
+  const handleSort = (field: 'date' | 'description' | 'amount' | 'account' | 'confidence') => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Simple filtered and sorted transactions
   const filteredTransactions = useMemo(() => {
     let filtered = transactions;
 
@@ -164,13 +173,6 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
       );
     }
 
-    // Apply description filter
-    if (descriptionFilter) {
-      filtered = filtered.filter(transaction => 
-        transaction.description.toLowerCase().includes(descriptionFilter.toLowerCase())
-      );
-    }
-
     // Apply status filter
     if (filter === 'needs-review') {
       filtered = filtered.filter(t => !t.accountCode || (t.confidence || 0) < 70);
@@ -178,8 +180,45 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
       filtered = filtered.filter(t => (t.confidence || 0) >= 90 && t.accountCode);
     }
 
+    // Apply sorting
+    if (sortField) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        switch (sortField) {
+          case 'date':
+            aValue = new Date(a.date).getTime();
+            bValue = new Date(b.date).getTime();
+            break;
+          case 'description':
+            aValue = a.description.toLowerCase();
+            bValue = b.description.toLowerCase();
+            break;
+          case 'amount':
+            aValue = Math.abs(a.amount);
+            bValue = Math.abs(b.amount);
+            break;
+          case 'account':
+            aValue = getAccountName(a.accountCode).toLowerCase();
+            bValue = getAccountName(b.accountCode).toLowerCase();
+            break;
+          case 'confidence':
+            aValue = a.confidence || 0;
+            bValue = b.confidence || 0;
+            break;
+          default:
+            return 0;
+        }
+
+        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
     return filtered;
-  }, [transactions, searchTerm, descriptionFilter, filter]);
+  }, [transactions, searchTerm, filter, sortField, sortDirection]);
 
   // Simple grouped transactions
   const groupedTransactions = useMemo(() => {
@@ -1107,56 +1146,132 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
                     />
                   </th>
                   <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
-                    Date
-                  </th>
-                  <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
-                    <div className="flex items-center space-x-2 description-filter">
-                      <span>Description</span>
-                      <div className="relative">
-                        <button
-                          onClick={() => setShowDescriptionFilter(!showDescriptionFilter)}
-                          className="p-1 hover:bg-slate-100 rounded transition-colors"
-                          title="Filter by description"
-                        >
-                          <svg className="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    <button
+                      onClick={() => handleSort('date')}
+                      className="flex items-center space-x-1 hover:text-slate-900 transition-colors"
+                    >
+                      <span>Date</span>
+                      <div className="w-3 h-3 flex flex-col justify-center">
+                        {sortField === 'date' && sortDirection === 'asc' && (
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 12 12">
+                            <path d="M6 3l3 3H3z"/>
                           </svg>
-                        </button>
-                        {showDescriptionFilter && (
-                          <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
-                            <div className="p-3">
-                              <input
-                                type="text"
-                                value={descriptionFilter}
-                                onChange={(e) => setDescriptionFilter(e.target.value)}
-                                placeholder="Filter by description..."
-                                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500 text-sm"
-                              />
-                              {descriptionFilter && (
-                                <button
-                                  onClick={() => setDescriptionFilter('')}
-                                  className="mt-2 px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors"
-                                >
-                                  Clear filter
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                        )}
+                        {sortField === 'date' && sortDirection === 'desc' && (
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 12 12">
+                            <path d="M6 9L3 6h6z"/>
+                          </svg>
+                        )}
+                        {sortField !== 'date' && (
+                          <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 12 12">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M6 3l3 3H3z M6 9L3 6h6z"/>
+                          </svg>
                         )}
                       </div>
-                    </div>
+                    </button>
                   </th>
                   <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
-                    Amount
+                    <button
+                      onClick={() => handleSort('description')}
+                      className="flex items-center space-x-1 hover:text-slate-900 transition-colors"
+                    >
+                      <span>Description</span>
+                      <div className="w-3 h-3 flex flex-col justify-center">
+                        {sortField === 'description' && sortDirection === 'asc' && (
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 12 12">
+                            <path d="M6 3l3 3H3z"/>
+                          </svg>
+                        )}
+                        {sortField === 'description' && sortDirection === 'desc' && (
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 12 12">
+                            <path d="M6 9L3 6h6z"/>
+                          </svg>
+                        )}
+                        {sortField !== 'description' && (
+                          <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 12 12">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M6 3l3 3H3z M6 9L3 6h6z"/>
+                          </svg>
+                        )}
+                      </div>
+                    </button>
                   </th>
                   <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
-                    Account
+                    <button
+                      onClick={() => handleSort('amount')}
+                      className="flex items-center space-x-1 hover:text-slate-900 transition-colors"
+                    >
+                      <span>Amount</span>
+                      <div className="w-3 h-3 flex flex-col justify-center">
+                        {sortField === 'amount' && sortDirection === 'asc' && (
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 12 12">
+                            <path d="M6 3l3 3H3z"/>
+                          </svg>
+                        )}
+                        {sortField === 'amount' && sortDirection === 'desc' && (
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 12 12">
+                            <path d="M6 9L3 6h6z"/>
+                          </svg>
+                        )}
+                        {sortField !== 'amount' && (
+                          <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 12 12">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M6 3l3 3H3z M6 9L3 6h6z"/>
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  </th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
+                    <button
+                      onClick={() => handleSort('account')}
+                      className="flex items-center space-x-1 hover:text-slate-900 transition-colors"
+                    >
+                      <span>Account</span>
+                      <div className="w-3 h-3 flex flex-col justify-center">
+                        {sortField === 'account' && sortDirection === 'asc' && (
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 12 12">
+                            <path d="M6 3l3 3H3z"/>
+                          </svg>
+                        )}
+                        {sortField === 'account' && sortDirection === 'desc' && (
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 12 12">
+                            <path d="M6 9L3 6h6z"/>
+                          </svg>
+                        )}
+                        {sortField !== 'account' && (
+                          <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 12 12">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M6 3l3 3H3z M6 9L3 6h6z"/>
+                          </svg>
+                        )}
+                      </div>
+                    </button>
                   </th>
                   <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
                     Tax Rate
                   </th>
                   <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
-                    AI Score
+                    <button
+                      onClick={() => handleSort('confidence')}
+                      className="flex items-center space-x-1 hover:text-slate-900 transition-colors"
+                    >
+                      <span>AI Score</span>
+                      <div className="w-3 h-3 flex flex-col justify-center">
+                        {sortField === 'confidence' && sortDirection === 'asc' && (
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 12 12">
+                            <path d="M6 3l3 3H3z"/>
+                          </svg>
+                        )}
+                        {sortField === 'confidence' && sortDirection === 'desc' && (
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 12 12">
+                            <path d="M6 9L3 6h6z"/>
+                          </svg>
+                        )}
+                        {sortField !== 'confidence' && (
+                          <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 12 12">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M6 3l3 3H3z M6 9L3 6h6z"/>
+                          </svg>
+                        )}
+                      </div>
+                    </button>
                   </th>
                   <th className="px-6 py-5 text-left text-xs font-medium text-slate-600 tracking-wide uppercase">
                     Status
