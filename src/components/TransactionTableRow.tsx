@@ -77,9 +77,9 @@ const TransactionTableRow: React.FC<TransactionTableRowProps> = ({
                   {transaction.merchant}
                 </div>
               )}
-              {transaction.source && (
+              {(transaction as any).source && (
                 <div className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
-                  📄 {transaction.source}
+                  📄 {(transaction as any).source}
                 </div>
               )}
             </div>
