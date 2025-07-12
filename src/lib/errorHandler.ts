@@ -32,6 +32,10 @@ export class ErrorHandler {
       return 'Amount column is unclear. Please ensure your CSV has a clear amount column. Recommended header: "Amount". Other accepted formats: "Transaction Amount", "Value", "Debit/Credit".';
     }
     
+    if (message.includes('Future date not allowed') || message.includes('future dates')) {
+      return 'Future dates detected in your file. Transaction dates must be today or in the past. Please check your file for incorrect dates and try again.';
+    }
+    
     // File format errors
     if (message.includes('Unsupported bank format')) {
       return 'Your bank format is not yet supported. Please ensure your CSV has Date, Description, and Amount columns, or contact support for your bank format.';

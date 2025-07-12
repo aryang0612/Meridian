@@ -1,5 +1,18 @@
 import type { NextConfig } from "next";
 
+// Suppress Node.js deprecation warnings for development
+if (process.env.NODE_ENV === 'development') {
+  // Filter out the url.parse() deprecation warning (DEP0169)
+  const originalConsoleWarn = console.warn;
+  console.warn = function(...args: any[]) {
+    const message = args[0];
+    if (typeof message === 'string' && message.includes('DEP0169')) {
+      return; // Suppress this specific warning
+    }
+    return originalConsoleWarn.apply(console, args);
+  };
+}
+
 const nextConfig: NextConfig = {
   /* config options here */
   typescript: {

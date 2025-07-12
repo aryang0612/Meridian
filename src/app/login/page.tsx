@@ -1,47 +1,27 @@
 "use client";
-import { Auth } from '@supabase/auth-ui-react';
-import { ThemeSupa } from '@supabase/auth-ui-shared';
-import { getSupabaseClient } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 export default function LoginPage() {
-  const supabase = getSupabaseClient();
   const { user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (user) {
       router.push('/'); // Redirect to home if already logged in
+    } else {
+      // Redirect to main page to show beautiful preloader instead of this boring page
+      router.push('/');
     }
   }, [user, router]);
 
-  // Handle case when Supabase is not available
-  if (!supabase) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
-        <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-          <h1 className="text-2xl font-bold mb-4 text-center">Sign in to Meridian AI</h1>
-          <div className="text-center text-slate-600">
-            <p>Authentication is not available in this environment.</p>
-            <p className="mt-2 text-sm">Please configure Supabase credentials to enable login.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Show loading while redirecting
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
-      <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-4 text-center">Sign in to Meridian AI</h1>
-        <Auth
-          supabaseClient={supabase}
-          appearance={{ theme: ThemeSupa }}
-          providers={[]}
-          theme="light"
-        />
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="text-white text-center">
+        <div className="animate-spin w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+        <p>Redirecting to Meridian AI...</p>
       </div>
     </div>
   );

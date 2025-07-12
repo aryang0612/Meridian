@@ -32,26 +32,27 @@ export class ChartOfAccounts {
   private initializationPromise: Promise<void> | null = null;
 
   constructor(province: string = 'ON') {
+    console.log(`🏗️  ChartOfAccounts constructor called with province: ${province}`);
     this.currentProvince = province;
     // Don't call initializeAccounts in constructor - make it explicit
   }
 
   // Singleton pattern to prevent multiple instances
   static getInstance(province: string = 'ON'): ChartOfAccounts {
-    console.log(`🏭 ChartOfAccounts.getInstance called with province: ${province}`);
-    
     // Use a single global instance and change its province as needed
     if (!ChartOfAccounts.instances.has('global')) {
+      console.log(`🏭 ChartOfAccounts.getInstance called with province: ${province}`);
       console.log(`🆕 Creating new ChartOfAccounts instance for province: ${province}`);
       ChartOfAccounts.instances.set('global', new ChartOfAccounts(province));
     }
     
     const instance = ChartOfAccounts.instances.get('global')!;
+    
     console.log(`🔍 Current instance province: ${instance.currentProvince}, requested: ${province}`);
     
     // Update province if different
     if (instance.currentProvince !== province) {
-      console.log(`🔄 Province mismatch, setting province from ${instance.currentProvince} to ${province}`);
+      console.log(`🌍 ChartOfAccounts.setProvince: Changing from ${instance.currentProvince} to ${province}`);
       instance.currentProvince = province;
       instance.isInitialized = false;
       instance.initializationPromise = null; // Clear cached promise
@@ -78,18 +79,29 @@ export class ChartOfAccounts {
 
   private async initializeAccounts(): Promise<void> {
     if (this.isLoading) {
+      console.log(`⏳ Already loading accounts for province: ${this.currentProvince}, waiting...`);
       await this.initializationPromise;
       return;
     }
+    
+    // If already initialized for this province, don't reinitialize
+    if (this.isInitialized && this.accounts.size > 0) {
+      console.log(`✅ Already initialized for province: ${this.currentProvince} (${this.accounts.size} accounts)`);
+      return;
+    }
+    
+    console.log(`🔍 Current accounts size: ${this.accounts.size}, isInitialized: ${this.isInitialized}`);
+    console.log(`🔄 ChartOfAccounts: Province set to ${this.currentProvince}, forcing account reload...`);
     
     this.isLoading = true;
     this.isInitialized = false;
     
     this.initializationPromise = (async () => {
-      this.accounts.clear();
       console.log(`🧹 Cleared accounts map for province: ${this.currentProvince}`);
+      this.accounts.clear();
       
       try {
+        console.log(`📦 Loading module for province: ${this.currentProvince}`);
         // Dynamically import the province-specific accounts
         const moduleMap: Record<string, () => Promise<any>> = {
           AB: () => import('../data/chartOfAccounts/alberta'),
@@ -108,22 +120,21 @@ export class ChartOfAccounts {
         };
 
         const importModule = moduleMap[this.currentProvince] || moduleMap['ON'];
-        console.log(`📦 Loading module for province: ${this.currentProvince}`);
         
         const accountsModule = await importModule();
         const accountsKey = `${this.currentProvince}_ACCOUNTS`;
+        
         console.log(`🔍 Looking for accounts key: "${accountsKey}"`);
         console.log(`📋 Available keys in module:`, Object.keys(accountsModule));
         
         const accounts = accountsModule[accountsKey] || accountsModule['ON_ACCOUNTS'];
         
         if (!accounts) {
-          console.error(`❌ No accounts found for key "${accountsKey}" or fallback "ON_ACCOUNTS"`);
           throw new Error(`Failed to load accounts for province ${this.currentProvince}`);
         }
-        
-        console.log(`📊 Found ${accounts.length} accounts for province ${this.currentProvince}`);
 
+        console.log(`📊 Found ${accounts.length} accounts for province ${this.currentProvince}`);
+        
         for (const acc of accounts) {
           this.accounts.set(acc.code, {
             code: acc.code,
@@ -135,16 +146,19 @@ export class ChartOfAccounts {
           });
         }
 
-        // Debug: Show tax codes for key accounts
-        const debugAccounts = ['200', '453', '449', '420'];
-        for (const code of debugAccounts) {
-          const account = this.accounts.get(code);
-          if (account) {
-            console.log(`🏷️  Account ${code} (${account.name}): "${account.taxCode}"`);
-          }
+        // Show a sample account for debugging
+        const sampleAccount = this.accounts.get('453') || this.accounts.get('420') || Array.from(this.accounts.values())[0];
+        if (sampleAccount) {
+          console.log(`🏷️  Account ${sampleAccount.code} (${sampleAccount.name}): "${sampleAccount.taxCode}"`);
         }
 
         console.log(`📊 Chart of Accounts initialized for province: ${this.currentProvince} (${this.accounts.size} accounts)`);
+        
+        // Show sample account for verification
+        const testAccount = this.accounts.get('453');
+        if (testAccount) {
+          console.log(`✅ Sample account 453 (${testAccount.name}): ${testAccount.name}, Tax Code: "${testAccount.taxCode}"`);
+        }
       } catch (error) {
         console.error('Error loading chart of accounts:', error);
         // Fallback to basic accounts if loading fails
@@ -191,23 +205,27 @@ export class ChartOfAccounts {
 
   async setProvince(province: string): Promise<void> {
     console.log(`🌍 ChartOfAccounts.setProvince: Changing from ${this.currentProvince} to ${province}`);
-    console.log(`🔍 Current accounts size: ${this.accounts.size}, isInitialized: ${this.isInitialized}`);
     
-    // ALWAYS force reload accounts when province changes, even if it appears to be the same
-    this.currentProvince = province;
-    this.isInitialized = false;
-    this.initializationPromise = null; // Clear any cached promise
-    
-    console.log(`🔄 ChartOfAccounts: Province set to ${province}, forcing account reload...`);
-    await this.initializeAccounts();
-    
-    // Verify the accounts were actually loaded correctly
-    const sampleAccount = this.accounts.get('453'); // Office Expenses
-    if (sampleAccount) {
-      console.log(`✅ Sample account 453 (Office Expenses): ${sampleAccount.name}, Tax Code: "${sampleAccount.taxCode}"`);
+    // Only force reload if the province actually changed
+    if (this.currentProvince !== province) {
+      this.currentProvince = province;
+      this.isInitialized = false;
+      this.initializationPromise = null; // Clear any cached promise
+      
+      await this.initializeAccounts();
+      
+      console.log(`✅ ChartOfAccounts: Successfully reinitialized for province ${province} (${this.accounts.size} accounts)`);
+    } else {
+      console.log(`🔄 Province unchanged (${province}), checking initialization...`);
+      
+      // Only initialize if not already initialized
+      if (!this.isInitialized) {
+        await this.initializeAccounts();
+        console.log(`✅ ChartOfAccounts: Successfully initialized for province ${province} (${this.accounts.size} accounts)`);
+      } else {
+        console.log(`✅ Already initialized for province: ${province} (${this.accounts.size} accounts)`);
+      }
     }
-    
-    console.log(`✅ ChartOfAccounts: Successfully reinitialized for province ${province} (${this.accounts.size} accounts)`);
   }
 
   getProvince(): string {

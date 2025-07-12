@@ -91,8 +91,6 @@ export default function ReportsPage() {
     if (typeof window !== 'undefined' && !reportGenerator) {
       const initReportGenerator = async () => {
         try {
-          console.log('🔄 Initializing ReportGenerator...');
-          
           // Use ChartOfAccounts singleton instance
           const chartOfAccounts = ChartOfAccounts.getInstance('ON');
           await chartOfAccounts.waitForInitialization();
@@ -102,7 +100,9 @@ export default function ReportsPage() {
           
           setReportGenerator(generator);
           setIsReportGeneratorReady(true);
-          console.log('✅ ReportGenerator initialized successfully');
+          if (process.env.NODE_ENV === 'development') {
+            console.log('✅ ReportGenerator initialized successfully');
+          }
         } catch (error) {
           console.error('❌ Failed to initialize ReportGenerator:', error);
           // Create a fallback generator even if Chart of Accounts fails
@@ -111,7 +111,9 @@ export default function ReportsPage() {
             const fallbackGenerator = new ReportGenerator(fallbackChartOfAccounts);
             setReportGenerator(fallbackGenerator);
             setIsReportGeneratorReady(true);
-            console.log('✅ Fallback ReportGenerator initialized');
+            if (process.env.NODE_ENV === 'development') {
+              console.log('✅ Fallback ReportGenerator initialized');
+            }
           } catch (fallbackError) {
             console.error('❌ Fallback ReportGenerator also failed:', fallbackError);
             setIsReportGeneratorReady(true); // Still set to true to avoid blocking
@@ -124,10 +126,6 @@ export default function ReportsPage() {
 
   // Handle data processing and report generation
   useEffect(() => {
-    console.log('📊 Reports page useEffect triggered');
-    console.log('📊 Context data:', contextData);
-    console.log('📊 ReportGenerator ready:', isReportGeneratorReady);
-    
     let data: FinancialData;
     
     // Try to convert uploaded data first
@@ -135,11 +133,15 @@ export default function ReportsPage() {
     if (uploadedData) {
       data = uploadedData;
       setIsSample(false);
-      console.log('📊 Using uploaded transaction data for reports:', data.transactions.length, 'transactions');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📊 Using uploaded transaction data for reports:', data.transactions.length, 'transactions');
+      }
     } else {
       data = generateSampleData();
       setIsSample(true);
-      console.log('📊 Using sample data for reports demonstration');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📊 Using sample data for reports demonstration');
+      }
     }
     
     setFinancialData(data);
@@ -147,23 +149,24 @@ export default function ReportsPage() {
     // Generate report data only when ReportGenerator is ready
     if (isReportGeneratorReady && reportGenerator) {
       try {
-        console.log('📊 Generating reports with data:', data);
         const plData = reportGenerator.generateProfitLossData(data);
         const bsData = reportGenerator.generateBalanceSheetData(data);
         setProfitLossData(plData);
         setBalanceSheetData(bsData);
-        console.log('✅ Reports generated successfully');
-        console.log('📊 P&L Data:', plData);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Reports generated successfully');
+        }
       } catch (error) {
         console.error('❌ Error generating reports:', error);
         // Fallback: generate basic report data manually
-        console.log('🔄 Attempting fallback report generation...');
         try {
           const fallbackPlData = generateFallbackProfitLossData(data);
           const fallbackBsData = generateFallbackBalanceSheetData(data);
           setProfitLossData(fallbackPlData);
           setBalanceSheetData(fallbackBsData);
-          console.log('✅ Fallback reports generated successfully');
+          if (process.env.NODE_ENV === 'development') {
+            console.log('✅ Fallback reports generated successfully');
+          }
         } catch (fallbackError) {
           console.error('❌ Fallback report generation also failed:', fallbackError);
         }
@@ -289,41 +292,7 @@ export default function ReportsPage() {
             </div>
           )}
           
-          {/* Debug banner for development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800 rounded">
-              <div className="flex items-center justify-between">
-                <div>
-                  <strong>Debug Info:</strong> 
-                  <span className="ml-2">ReportGenerator Ready: {isReportGeneratorReady ? '✅' : '⏳'}</span>
-                  <span className="ml-2">Has Data: {hasReportData ? '✅' : '❌'}</span>
-                  <span className="ml-2">Can Show Reports: {canShowReports ? '✅' : '❌'}</span>
-                </div>
-                <button
-                  onClick={() => {
-                    // Forcing sample data generation
-                    const sampleData = generateSampleData();
-                    setFinancialData(sampleData);
-                    setIsSample(true);
-                    if (reportGenerator) {
-                      try {
-                        const plData = reportGenerator.generateProfitLossData(sampleData);
-                        const bsData = reportGenerator.generateBalanceSheetData(sampleData);
-                        setProfitLossData(plData);
-                        setBalanceSheetData(bsData);
-                        // Sample reports generated
-                      } catch (error) {
-                        console.error('❌ Debug: Failed to generate sample reports:', error);
-                      }
-                    }
-                  }}
-                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                >
-                  Force Sample Data
-                </button>
-              </div>
-            </div>
-          )}
+
           {/* Page Header */}
           <div className="mb-12">
             <div className="flex items-center justify-between mb-6">

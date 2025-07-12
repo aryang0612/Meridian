@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { UnifiedCategorizationEngine } from '../../../lib/unifiedCategorizationEngine';
 import { ChartOfAccounts } from '../../../lib/chartOfAccounts';
+import { openAIClient } from '../../../lib/openaiClient';
+import { getCurrentUser } from '../../../lib/supabase';
 import fs from 'fs';
 import path from 'path';
 
-// Simple in-memory cache for AI categorization results
-const categorizationCache = new Map<string, any>();
+// Enhanced categorization cache
+interface CachedCategorizationResult {
+  result: {
+    accountCode: string;
+    confidence: number;
+    reasoning: string;
+    suggestedKeyword?: string;
+    source: string;
+  };
+  timestamp: number;
+}
+
+const categorizationCache = new Map<string, CachedCategorizationResult>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes (shorter for testing)
 
 // Manual environment loading function
@@ -69,8 +82,6 @@ export async function POST(request: NextRequest) {
       province = body.province || 'ON'; // Default to Ontario if not specified
     }
 
-    console.log(`📊 Initializing Chart of Accounts for province: ${province}`);
-
     // Initialize Chart of Accounts for the specified province
     const chartOfAccounts = ChartOfAccounts.getInstance(province);
     await chartOfAccounts.waitForInitialization();
@@ -91,76 +102,39 @@ export async function POST(request: NextRequest) {
         });
       }
       
-      console.log('🤖 AI button clicked - calling ChatGPT directly...');
+      console.log('🤖 AI button clicked - calling ChatGPT for reasoning...');
+      console.log(`📝 Transaction details: "${description}" (${amount})`);
+      console.log(`🏛️ Province: ${province}`);
       
-      // Check if this is a forced AI request (AI button clicked)
-      if (body.forceAI) {
-        console.log('🎯 Forcing ChatGPT categorization, skipping unified engine...');
+      // AI Button should ALWAYS go to ChatGPT for reasoning
+      const openaiKey = process.env.OPENAI_API_KEY;
+      if (!openaiKey || openaiKey.length < 10) {
+        console.warn('⚠️ No OpenAI API key found, falling back to unified engine');
         
-        // Skip unified engine and go directly to ChatGPT
-        const openaiKey = process.env.OPENAI_API_KEY;
-        if (!openaiKey || openaiKey.length < 10) {
-          console.warn('❌ No OpenAI API key found, cannot proceed with ChatGPT categorization');
-          return NextResponse.json(
-            { error: 'AI categorization not available' },
-            { status: 500 }
-          );
-        }
-
-        console.log('🤖 Calling ChatGPT for categorization...');
-      } else {
-        console.log('🤖 Attempting unified pattern matching first...');
-        
-        // Try unified categorization engine first (with training data)
-        const unifiedEngine = UnifiedCategorizationEngine.getInstance(province);
+        // Get current user for fallback unified engine
+        const currentUser = await getCurrentUser();
+        const userId = currentUser?.id;
+        const unifiedEngine = UnifiedCategorizationEngine.getInstance(province, userId);
         await unifiedEngine.initialize();
         const transaction = {
           id: Date.now().toString(),
           description,
           originalDescription: description,
           amount,
-          date: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+          date: new Date().toISOString().split('T')[0]
         };
-        
         const result = await unifiedEngine.categorizeTransaction(transaction);
         
-        // If we get a good result from training data/patterns, use it
-        if (result && result.confidence >= 70) {
-          console.log(`✅ Unified engine categorization successful: ${result.accountCode} (${result.confidence}%)`);
-          const response = {
-            accountCode: result.accountCode,
-            confidence: result.confidence,
-            reasoning: result.reasoning,
-            suggestedKeyword: result.suggestedKeyword,
-            source: result.source
-          };
-          
-          // Cache the result
-          categorizationCache.set(cacheKey, {
-            result: response,
-            timestamp: Date.now()
-          });
-          
-          return NextResponse.json(response);
-        }
-        
-        // Only fall back to ChatGPT if training data doesn't have good confidence
-        const openaiKey = process.env.OPENAI_API_KEY;
-        if (!openaiKey || openaiKey.length < 10) {
-          console.warn('⚠️ No OpenAI API key found, using unified engine result anyway');
-          return NextResponse.json({
-            accountCode: result.accountCode,
-            confidence: result.confidence,
-            reasoning: result.reasoning,
-            suggestedKeyword: result.suggestedKeyword,
-            source: result.source
-          });
-        }
-
-        // Fallback to ChatGPT for low confidence cases
-        console.log(`⚠️ Unified engine confidence too low (${result.confidence}%), falling back to ChatGPT...`);
-        console.log('🤖 Calling ChatGPT for categorization...');
+        return NextResponse.json({
+          accountCode: result.accountCode || '453',
+          confidence: result.confidence || 30,
+          reasoning: result.reasoning || 'No AI key available, using pattern matching',
+          suggestedKeyword: result.suggestedKeyword,
+          source: result.source || 'local'
+        });
       }
+
+      console.log('🤖 Calling ChatGPT for categorization...');
       
       try {
         // Import OpenAI client
@@ -423,7 +397,9 @@ ANALYZE THIS TRANSACTION NOW:`;
           if (!accountExists) {
             console.warn(`⚠️ Account code ${accountCode} not found in ${province} chart of accounts. Using fallback.`);
             // Fall back to local categorization with correct province (using unified engine)
-            const unifiedEngine = UnifiedCategorizationEngine.getInstance(province);
+            const currentUser = await getCurrentUser();
+            const userId = currentUser?.id;
+            const unifiedEngine = UnifiedCategorizationEngine.getInstance(province, userId);
             await unifiedEngine.initialize();
             const transaction = {
               id: Date.now().toString(),
@@ -512,7 +488,9 @@ ANALYZE THIS TRANSACTION NOW:`;
       } catch (error) {
         console.error('❌ ChatGPT API error:', error);
         // Fall back to local categorization with correct province (using unified engine)
-        const unifiedEngine = UnifiedCategorizationEngine.getInstance(province);
+        const currentUser = await getCurrentUser();
+        const userId = currentUser?.id;
+        const unifiedEngine = UnifiedCategorizationEngine.getInstance(province, userId);
         await unifiedEngine.initialize();
         const transaction = {
           id: Date.now().toString(),

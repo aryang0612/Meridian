@@ -905,11 +905,28 @@ export class CSVProcessor {
     const duplicateResult = { duplicateGroups: [], cleanTransactions: transactions, duplicateCount: 0 };
     onProgress?.(45);
     
-    // Initialize unified categorization engine
+    // Initialize unified categorization engine with user context
     console.log(`🔧 Initializing unified categorization engine...`);
     try {
-      await unifiedCategorizationEngine.initialize();
-      console.log(`✅ Unified categorization engine initialized successfully`);
+      // Get current user for user-specific keyword loading
+      const { getCurrentUser } = await import('./supabase');
+      const currentUser = await getCurrentUser();
+      const userId = currentUser?.id;
+      
+      if (userId) {
+        console.log(`🔑 Found user ID during CSV upload: ${userId} - will load saved keywords`);
+      } else {
+        console.log('⚠️ No user ID found during CSV upload - will use system patterns only');
+      }
+      
+      // Get unified engine with user context
+      const { UnifiedCategorizationEngine } = await import('./unifiedCategorizationEngine');
+      const unifiedEngine = UnifiedCategorizationEngine.getInstance('ON', userId);
+      await unifiedEngine.initialize();
+      console.log(`✅ Unified categorization engine initialized successfully with user context`);
+      
+      // Update the global reference to use the user-specific engine
+      (global as any).userSpecificEngine = unifiedEngine;
     } catch (error) {
       console.error(`❌ Failed to initialize unified categorization engine:`, error);
       throw new Error(`Categorization engine initialization failed: ${error}`);
@@ -928,8 +945,10 @@ export class CSVProcessor {
       for (const transaction of batch) {
         console.log(`🔍 Categorizing transaction ${categorizedTransactions.length + 1}/${transactions.length}: "${transaction.description}"`);
         try {
-          const result = await unifiedCategorizationEngine.categorizeTransaction(transaction);
-          console.log(`✅ Categorization result: accountCode=${result.accountCode}, confidence=${result.confidence}, category=${result.category}`);
+          // Use user-specific engine if available, otherwise fall back to default
+          const engine = (global as any).userSpecificEngine || unifiedCategorizationEngine;
+          const result = await engine.categorizeTransaction(transaction);
+          console.log(`✅ Categorization result: accountCode=${result.accountCode}, confidence=${result.confidence}, category=${result.category}, source=${result.source}`);
           
           transaction.accountCode = result.accountCode;
           transaction.confidence = result.confidence;
@@ -1286,7 +1305,7 @@ export class CSVProcessor {
   }
 
   /**
-   * Enhanced date parsing with multiple format support
+   * Enhanced date parsing with multiple format support and future date validation
    */
   private parseDateFlexible(dateString: string): Date | null {
     if (!dateString) return null;
@@ -1315,20 +1334,35 @@ export class CSVProcessor {
               const [month, day, year] = cleanDate.split('/');
               if (month && day && year) {
                 date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                if (!isNaN(date.getTime())) return date;
+                if (!isNaN(date.getTime())) {
+                  // Validate date before returning
+                  if (this.validateDateRange(date, cleanDate)) {
+                    return date;
+                  }
+                }
               }
               break;
             }
             case 'YYYY-MM-DD': {
               date = new Date(cleanDate);
-              if (!isNaN(date.getTime())) return date;
+              if (!isNaN(date.getTime())) {
+                // Validate date before returning
+                if (this.validateDateRange(date, cleanDate)) {
+                  return date;
+                }
+              }
               break;
             }
             case 'DD/MM/YYYY': {
               const [day, month, year] = cleanDate.split('/');
               if (day && month && year) {
                 date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                if (!isNaN(date.getTime())) return date;
+                if (!isNaN(date.getTime())) {
+                  // Validate date before returning
+                  if (this.validateDateRange(date, cleanDate)) {
+                    return date;
+                  }
+                }
               }
               break;
             }
@@ -1336,7 +1370,12 @@ export class CSVProcessor {
               const [day, month, year] = cleanDate.split('-');
               if (day && month && year) {
                 date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                if (!isNaN(date.getTime())) return date;
+                if (!isNaN(date.getTime())) {
+                  // Validate date before returning
+                  if (this.validateDateRange(date, cleanDate)) {
+                    return date;
+                  }
+                }
               }
               break;
             }
@@ -1344,7 +1383,12 @@ export class CSVProcessor {
               const [month, day, year] = cleanDate.split('-');
               if (month && day && year) {
                 date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                if (!isNaN(date.getTime())) return date;
+                if (!isNaN(date.getTime())) {
+                  // Validate date before returning
+                  if (this.validateDateRange(date, cleanDate)) {
+                    return date;
+                  }
+                }
               }
               break;
             }
@@ -1352,7 +1396,12 @@ export class CSVProcessor {
               const [year, month, day] = cleanDate.split('/');
               if (year && month && day) {
                 date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                if (!isNaN(date.getTime())) return date;
+                if (!isNaN(date.getTime())) {
+                  // Validate date before returning
+                  if (this.validateDateRange(date, cleanDate)) {
+                    return date;
+                  }
+                }
               }
               break;
             }
@@ -1360,7 +1409,12 @@ export class CSVProcessor {
               const [day, month, year] = cleanDate.split('.');
               if (day && month && year) {
                 date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                if (!isNaN(date.getTime())) return date;
+                if (!isNaN(date.getTime())) {
+                  // Validate date before returning
+                  if (this.validateDateRange(date, cleanDate)) {
+                    return date;
+                  }
+                }
               }
               break;
             }
@@ -1368,7 +1422,12 @@ export class CSVProcessor {
               const [month, day, year] = cleanDate.split('.');
               if (month && day && year) {
                 date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                if (!isNaN(date.getTime())) return date;
+                if (!isNaN(date.getTime())) {
+                  // Validate date before returning
+                  if (this.validateDateRange(date, cleanDate)) {
+                    return date;
+                  }
+                }
               }
               break;
             }
@@ -1384,7 +1443,12 @@ export class CSVProcessor {
                 if (monthIndex !== -1) {
                   const currentYear = new Date().getFullYear();
                   date = new Date(currentYear, monthIndex, parseInt(day));
-                  if (!isNaN(date.getTime())) return date;
+                  if (!isNaN(date.getTime())) {
+                    // Validate date before returning
+                    if (this.validateDateRange(date, cleanDate)) {
+                      return date;
+                    }
+                  }
                 }
               }
               break;
@@ -1398,13 +1462,46 @@ export class CSVProcessor {
       // Final fallback: try native Date parsing
       date = new Date(cleanDate);
       if (!isNaN(date.getTime())) {
-        return date;
+        // Validate date before returning
+        if (this.validateDateRange(date, cleanDate)) {
+          return date;
+        }
       }
       
       return null;
       
     } catch (error) {
       return null;
+    }
+  }
+
+  /**
+   * Validate that a date is within acceptable range (not in future, not too far in past)
+   */
+  private validateDateRange(date: Date, originalDateString: string): boolean {
+    try {
+      // Validate date is not in the future
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      if (date > today) {
+        console.warn(`⚠️ Future date detected and rejected: ${originalDateString} -> ${date.toISOString().split('T')[0]}`);
+        return false;
+      }
+
+      // Validate date is not too far in the past (more than 20 years)
+      const twentyYearsAgo = new Date();
+      twentyYearsAgo.setFullYear(twentyYearsAgo.getFullYear() - 20);
+      
+      if (date < twentyYearsAgo) {
+        console.warn(`⚠️ Date too far in the past and rejected: ${originalDateString} -> ${date.toISOString().split('T')[0]}`);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.warn(`⚠️ Date validation error for ${originalDateString}:`, error);
+      return false;
     }
   }
 
@@ -1588,8 +1685,20 @@ export class CSVProcessor {
     const invalidDates = transactions.filter(t => !t.date || t.date === 'Invalid Date');
     const missingDescriptions = transactions.filter(t => !t.description || t.description.trim() === '');
     const zeroAmounts = transactions.filter(t => t.amount === 0);
+    
+    // Check for future dates
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const futureDates = transactions.filter(t => t.date > todayStr);
+    
     if (invalidDates.length > 0) {
       result.warnings.push(`${invalidDates.length} transactions have invalid dates`);
+    }
+    
+    if (futureDates.length > 0) {
+      result.warnings.push(`${futureDates.length} transactions have future dates and were filtered out`);
+      // Remove future dated transactions from the main array
+      transactions.splice(0, transactions.length, ...transactions.filter(t => t.date <= todayStr));
     }
     
     if (missingDescriptions.length > 0) {
@@ -1745,7 +1854,9 @@ export class CSVProcessor {
       transactions,
       async (transaction) => {
         try {
-          const result = await unifiedCategorizationEngine.categorizeTransaction(transaction);
+          // Use user-specific engine if available, otherwise fall back to default
+          const engine = (global as any).userSpecificEngine || unifiedCategorizationEngine;
+          const result = await engine.categorizeTransaction(transaction);
           
           return {
             ...transaction,

@@ -455,42 +455,40 @@ export class DatabaseService {
       const supabase = getSupabaseClient();
       
       if (!supabase || !isSupabaseEnabled()) {
+        console.warn('⚠️ Supabase not available, cannot update rule usage');
         return;
       }
 
-      const user = await getCurrentUser();
-      
-      if (!user) {
-        return;
-      }
-
-      // Get current usage count and increment
+      // First get current usage count
       const { data: currentRule, error: fetchError } = await supabase
         .from('user_categorization_rules')
         .select('usage_count')
         .eq('id', ruleId)
-        .eq('user_id', user.id)
         .single();
 
       if (fetchError) {
-        console.error('Error fetching rule for usage update:', fetchError);
-        return;
+        console.error('Error fetching current rule usage:', fetchError);
+        return; // Don't throw, just log and continue
       }
 
+      // Update with incremented usage count
       const { error } = await supabase
         .from('user_categorization_rules')
-        .update({
+        .update({ 
           usage_count: (currentRule?.usage_count || 0) + 1,
           updated_at: new Date().toISOString()
         })
-        .eq('id', ruleId)
-        .eq('user_id', user.id);
+        .eq('id', ruleId);
 
       if (error) {
         console.error('Error updating rule usage:', error);
+        return; // Don't throw, just log and continue
       }
+
+      console.log('✅ Rule usage updated successfully');
     } catch (error) {
       console.error('❌ Failed to update rule usage:', error);
+      // Don't throw - rule usage update failing shouldn't break categorization
     }
   }
 
@@ -528,6 +526,46 @@ export class DatabaseService {
       console.log('✅ Categorization rule deleted successfully');
     } catch (error) {
       console.error('❌ Failed to delete categorization rule:', error);
+      throw error;
+    }
+  }
+
+  async updateUserCategorizationRule(
+    ruleId: string, 
+    updates: Partial<Pick<UserCategorizationRule, 'keyword' | 'category_code' | 'match_type' | 'is_active'>>
+  ): Promise<void> {
+    try {
+      const supabase = getSupabaseClient();
+      
+      if (!supabase || !isSupabaseEnabled()) {
+        console.warn('⚠️ Supabase not available, cannot update rule');
+        return;
+      }
+
+      const user = await getCurrentUser();
+      
+      if (!user) {
+        console.warn('⚠️ No authenticated user, cannot update rule');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('user_categorization_rules')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', ruleId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error updating categorization rule:', error);
+        throw error;
+      }
+
+      console.log('✅ Categorization rule updated successfully');
+    } catch (error) {
+      console.error('❌ Failed to update categorization rule:', error);
       throw error;
     }
   }

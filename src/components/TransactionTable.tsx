@@ -6,7 +6,6 @@ import { ChartOfAccounts } from '../lib/chartOfAccounts';
 import { AIEngine } from '../lib/aiEngine';
 import { UnifiedCategorizationEngine } from '../lib/unifiedCategorizationEngine';
 import BulkCategorySelector from './BulkCategorySelector';
-import AICategorizationButton from './AICategorizationButton';
 import SaveRulePopup from './SaveRulePopup';
 
 import { AppIcons, CommonIcons, IconSizes } from '../lib/iconSystem';
@@ -99,14 +98,14 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
 
   // Ensure chart of accounts is loaded for the current province
   useEffect(() => {
-    console.log(`📊 TransactionTable: Province changed to ${province}, reinitializing Chart of Accounts...`);
-    
     const initializeAccounts = async () => {
       setIsLoadingAccounts(true);
       try {
         await chartOfAccounts.setProvince(province);
         await chartOfAccounts.waitForInitialization();
-        console.log(`✅ TransactionTable: Chart of Accounts ready for province ${province}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`✅ TransactionTable: Chart of Accounts ready for province ${province}`);
+        }
       } catch (error) {
         console.error('❌ TransactionTable: Failed to initialize chart of accounts:', error);
       } finally {
@@ -255,19 +254,22 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
     return (accountCode: string | undefined): number | undefined => {
       if (!accountCode) return undefined;
       
-      // Return cached value if available
-      if (cache.has(accountCode)) {
-        return cache.get(accountCode);
-      }
-      
       // Only check if chart of accounts is ready
       if (!chartOfAccounts.isReady()) {
         return undefined;
       }
       
+      // Create cache key that includes province to prevent cross-province caching
+      const cacheKey = `${province}-${accountCode}`;
+      
+      // Return cached value if available
+      if (cache.has(cacheKey)) {
+        return cache.get(cacheKey);
+      }
+      
       const account = chartOfAccounts.getAccount(accountCode);
       if (!account || !account.taxCode) {
-        cache.set(accountCode, undefined);
+        cache.set(cacheKey, undefined);
         return undefined;
       }
       
@@ -275,17 +277,19 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
       const match = account.taxCode.match(/\((\d+(?:\.\d+)?)%\)/);
       const taxRate = match ? parseFloat(match[1]) : undefined;
       
-      // Cache the result
-      cache.set(accountCode, taxRate);
+      // Cache the result with province-specific key
+      cache.set(cacheKey, taxRate);
       return taxRate;
     };
-  }, [chartOfAccounts, chartUpdateTrigger]);
+  }, [chartOfAccounts, chartUpdateTrigger, province]);
 
   useEffect(() => {
     // Trigger re-render when Chart of Accounts is ready
     if (!isLoadingAccounts && chartOfAccounts.isReady()) {
       setChartUpdateTrigger(prev => prev + 1);
-      console.log(`🔄 TransactionTable: Forcing re-render due to Chart of Accounts update`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🔄 TransactionTable: Forcing re-render due to Chart of Accounts update`);
+      }
     }
   }, [isLoadingAccounts, chartOfAccounts, province]);
 
@@ -413,7 +417,12 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
   // Handle saving user categorization rule
   const handleSaveRule = async (keyword: string, accountCode: string, matchType: 'contains' | 'fuzzy' | 'regex' | 'exact') => {
     try {
-      const unifiedEngine = UnifiedCategorizationEngine.getInstance(province);
+      // Get current user for user-specific rule saving
+      const { getCurrentUser } = await import('../lib/supabase');
+      const currentUser = await getCurrentUser();
+      const userId = currentUser?.id;
+      
+      const unifiedEngine = UnifiedCategorizationEngine.getInstance(province, userId);
       await unifiedEngine.saveUserRule(keyword, accountCode, matchType);
       setNotification(`✅ Rule saved! Future transactions containing "${keyword}" will be categorized to ${getAccountName(accountCode)}`);
       setSaveRulePopup({ isOpen: false, transaction: null });
@@ -1429,16 +1438,6 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex items-center space-x-2">
-                        {/* Manual AI Button */}
-                        <AICategorizationButton
-                          transaction={transaction}
-                          onCategorize={(accountCode, confidence) => 
-                            handleIndividualAICategorize(transaction.id, accountCode, confidence)
-                          }
-                          province={province}
-                          disabled={false}
-                        />
-                        
                         {/* Approve/Unapprove Button */}
                         {transaction.isApproved ? (
                           <button
@@ -1664,15 +1663,6 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
                           )}
                           
                           <div className="flex items-center space-x-2">
-                            <AICategorizationButton
-                              transaction={transaction}
-                              onCategorize={(accountCode, confidence) => 
-                                handleIndividualAICategorize(transaction.id, accountCode, confidence)
-                              }
-                              province={province}
-                              disabled={false}
-                            />
-                            
                             {transaction.isApproved ? (
                               <button
                                 onClick={() => handleIndividualUnapprove(transaction.id)}

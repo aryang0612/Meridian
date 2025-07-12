@@ -60,9 +60,20 @@ export class UnifiedCategorizationEngine {
   }
 
   static getInstance(province: string = 'ON', userId?: string): UnifiedCategorizationEngine {
+    // If no instance exists, create one
     if (!UnifiedCategorizationEngine.instance) {
       UnifiedCategorizationEngine.instance = new UnifiedCategorizationEngine(province, userId);
+      return UnifiedCategorizationEngine.instance;
     }
+    
+    // If userId has changed, we need to update the existing instance
+    if (UnifiedCategorizationEngine.instance.userId !== userId) {
+      console.log(`🔄 UserID changed from ${UnifiedCategorizationEngine.instance.userId} to ${userId}, updating instance...`);
+      UnifiedCategorizationEngine.instance.userId = userId;
+      UnifiedCategorizationEngine.instance.isInitialized = false; // Force re-initialization
+      UnifiedCategorizationEngine.instance.userRules = []; // Clear cached rules
+    }
+    
     return UnifiedCategorizationEngine.instance;
   }
 
@@ -4259,36 +4270,56 @@ ANALYZE THIS TRANSACTION NOW:`;
     }
 
     const description = transaction.description?.toLowerCase() || '';
+    console.log(`🔍 Checking ${this.userRules.length} user rules for: "${description}"`);
     
     // Check each user rule
     for (const rule of this.userRules) {
       if (!rule.is_active) continue;
       
       let matches = false;
+      let matchDetails = '';
       
       switch (rule.match_type) {
         case 'exact':
           matches = description === rule.keyword.toLowerCase();
+          matchDetails = matches ? 'exact match' : 'not exact match';
           break;
         case 'contains':
-          matches = description.includes(rule.keyword.toLowerCase());
+          // Smart contains matching - if keyword has spaces, check if all words are present
+          const keyword = rule.keyword.toLowerCase();
+          if (keyword.includes(' ')) {
+            // Multi-word keyword: check if all words are present in the description
+            const keywordWords = keyword.split(/\s+/);
+            const matchedWords = keywordWords.filter(word => description.includes(word));
+            matches = matchedWords.length === keywordWords.length;
+            matchDetails = `${matchedWords.length}/${keywordWords.length} words found: [${matchedWords.join(', ')}]`;
+          } else {
+            // Single word keyword: use simple substring matching
+            matches = description.includes(keyword);
+            matchDetails = matches ? 'single word found' : 'single word not found';
+          }
           break;
         case 'fuzzy':
-          // Simple fuzzy matching - check if description contains most words from keyword
+          // Fuzzy matching - check if description contains most words from keyword (70% threshold)
           const keywordWords = rule.keyword.toLowerCase().split(/\s+/);
           const matchedWords = keywordWords.filter(word => description.includes(word));
-          matches = matchedWords.length >= Math.ceil(keywordWords.length * 0.7);
+          const threshold = Math.ceil(keywordWords.length * 0.7);
+          matches = matchedWords.length >= threshold;
+          matchDetails = `${matchedWords.length}/${threshold} words needed (70% of ${keywordWords.length})`;
           break;
         case 'regex':
           try {
             const regex = new RegExp(rule.keyword, 'i');
             matches = regex.test(description);
+            matchDetails = matches ? 'regex pattern matched' : 'regex pattern not matched';
           } catch (e) {
             console.warn(`Invalid regex in user rule: ${rule.keyword}`);
             continue;
           }
           break;
       }
+      
+      console.log(`🔍 Rule "${rule.keyword}" (${rule.match_type}): ${matchDetails} → ${matches ? '✅ MATCH' : '❌ NO MATCH'}`);
       
       if (matches) {
         // Update rule usage
@@ -4300,11 +4331,12 @@ ANALYZE THIS TRANSACTION NOW:`;
         
         const inflowOutflow = this.getInflowOutflow(transaction, rule.category_code);
         
+        console.log(`✅ User keyword match found: ${rule.category_code} (98%)`);
         return {
           category: 'User Rule',
           accountCode: rule.category_code,
           confidence: 98, // High confidence for user-defined rules
-          reasoning: `Matched user rule: "${rule.keyword}" (${rule.match_type} match)`,
+          reasoning: `Matched user rule: "${rule.keyword}" (${rule.match_type} match - ${matchDetails})`,
           source: 'user_rule' as any,
           merchant: rule.keyword,
           inflowOutflow,
@@ -4313,6 +4345,7 @@ ANALYZE THIS TRANSACTION NOW:`;
       }
     }
     
+    console.log(`❌ No user rules matched for: "${description}"`);
     return null;
   }
 

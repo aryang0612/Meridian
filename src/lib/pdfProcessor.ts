@@ -331,6 +331,12 @@ export class PDFProcessor {
         // Normalize the date
         const normalizedDate = this.normalizeDateEnhanced(foundDate);
         
+        // Validate date range to prevent future dates
+        if (!this.validateDateRange(normalizedDate, foundDate)) {
+          // Skip this transaction if date is invalid
+          continue;
+        }
+        
         // Determine transaction sign
         const finalAmount = this.determineTransactionSign(description, foundAmount);
         
@@ -507,6 +513,56 @@ export class PDFProcessor {
     }
     
     return dateStr; // Return as-is if no pattern matches
+  }
+
+  /**
+   * Validate that a date is within acceptable range (not in future, not too far in past)
+   */
+  private validateDateRange(normalizedDate: string, originalDateString: string): boolean {
+    try {
+      // Parse the normalized date (DD/MM/YYYY format)
+      const parts = normalizedDate.split('/');
+      if (parts.length !== 3) {
+        console.warn(`⚠️ Invalid date format for validation: ${normalizedDate}`);
+        return false;
+      }
+
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      const year = parseInt(parts[2]);
+
+      // Create date object
+      const date = new Date(year, month - 1, day);
+
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn(`⚠️ Invalid date created from: ${normalizedDate}`);
+        return false;
+      }
+
+      // Validate date is not in the future
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      if (date > today) {
+        console.warn(`⚠️ Future date detected and rejected: ${originalDateString} -> ${normalizedDate}`);
+        return false;
+      }
+
+      // Validate date is not too far in the past (more than 20 years)
+      const twentyYearsAgo = new Date();
+      twentyYearsAgo.setFullYear(twentyYearsAgo.getFullYear() - 20);
+      
+      if (date < twentyYearsAgo) {
+        console.warn(`⚠️ Date too far in the past and rejected: ${originalDateString} -> ${normalizedDate}`);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.warn(`⚠️ Date validation error for ${originalDateString}:`, error);
+      return false;
+    }
   }
   
   private determineTransactionSign(description: string, amount: string): string {

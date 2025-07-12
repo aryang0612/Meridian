@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFinancialData } from '../context/FinancialDataContext';
 import { CommonIcons } from '../lib/iconSystem';
 import { PROVINCES } from '../data/provinces';
+import Preloader from '../components/Preloader';
 
 interface ProcessingResultsData {
   validation: ValidationResult;
@@ -22,7 +23,7 @@ interface ProcessingResultsData {
 }
 
 export default function Dashboard() {
-  const { user, loading } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const { financialData, setDashboardData } = useFinancialData();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [processingResults, setProcessingResults] = useState<ProcessingResultsData | null>(null);
@@ -42,32 +43,58 @@ export default function Dashboard() {
     }
   }, [user?.id, selectedProvince]);
 
-  // Simplified context sync - only restore on mount
+  // Enhanced state restoration - restore only once when dashboard data becomes available
+  const [hasRestoredState, setHasRestoredState] = useState(false);
+  
   useEffect(() => {
-    if (financialData?.dashboard && !transactions.length) {
-      const { transactions: savedTrans, processingResults: savedResults } = financialData.dashboard;
-      if (savedTrans.length > 0) {
+    if (financialData?.dashboard && !hasRestoredState && transactions.length === 0) {
+      const { transactions: savedTrans, processingResults: savedResults, selectedProvince: savedProvince, currentStep: savedStep } = financialData.dashboard;
+      
+      // Restore transactions if they exist
+      if (savedTrans && savedTrans.length > 0) {
         setTransactions(savedTrans);
+        console.log(`✅ Restored ${savedTrans.length} transactions from localStorage`);
+        
+        // Restore processing results if they exist
         if (savedResults) {
-          // Ensure bankFormat is properly typed when restored from context
           setProcessingResults({
             ...savedResults,
             bankFormat: savedResults.bankFormat as BankFormat | 'Unknown'
           });
+          console.log('✅ Restored processing results from localStorage');
         }
+        
+        // Restore province if it was saved
+        if (savedProvince && savedProvince !== selectedProvince) {
+          setSelectedProvince(savedProvince);
+          console.log(`✅ Restored province selection: ${savedProvince}`);
+        }
+        
+        // Set appropriate step based on what data we have
+        if (savedStep) {
+          setCurrentStep(savedStep);
+          console.log(`✅ Restored to step: ${savedStep}`);
+        } else {
+          setCurrentStep('review');
+          console.log('✅ Restored to review step');
+        }
+        
+        setHasRestoredState(true);
       }
     }
-  }, [financialData]);
+  }, [financialData?.dashboard, hasRestoredState, transactions.length, selectedProvince]);
 
-  // Update dashboard data when province changes
+  // Update dashboard data when state changes (but avoid infinite loops)
   useEffect(() => {
-    if (transactions.length > 0) {
+    if (transactions.length > 0 && hasRestoredState) {
       setDashboardData({
         transactions,
+        processingResults: processingResults || undefined,
+        currentStep,
         selectedProvince
       });
     }
-  }, [selectedProvince, transactions]);
+  }, [transactions, processingResults, currentStep, selectedProvince, setDashboardData, hasRestoredState]);
 
   const handleFileProcessed = (data: {
     transactions: Transaction[];
@@ -182,26 +209,10 @@ export default function Dashboard() {
 
 
 
-  // Redirect to login if not authenticated (only after component is mounted)
-  // Temporarily disabled for testing - uncomment when Supabase is properly configured
-  /*
+  // Show preloader with login overlay if not authenticated
   if (!loading && !user) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-slate-900 mb-4">Authentication Required</div>
-          <div className="text-slate-600 mb-8">Please log in to access the dashboard.</div>
-          <a 
-            href="/login" 
-            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-          >
-            Go to Login
-          </a>
-        </div>
-      </div>
-    );
+    return <Preloader />;
   }
-  */
 
   // Only render title on client to prevent hydration mismatch
 
@@ -215,15 +226,17 @@ export default function Dashboard() {
         onNewFile={handleNewFile}
       />
 
+
+
       {/* Enhanced Main Content Area */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="space-y-6">
           {/* Enhanced Progress Indicator */}
           <div className="text-center">
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">
+            <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 leading-tight" style={{ fontFamily: 'Poppins, -apple-system, BlinkMacSystemFont, sans-serif' }}>
               Meridian AI Bookkeeping
             </h1>
-            <p className="text-slate-600 mb-8">
+            <p className="text-slate-600 text-lg md:text-xl mb-12 max-w-2xl mx-auto leading-relaxed" style={{ fontFamily: 'Poppins, -apple-system, BlinkMacSystemFont, sans-serif' }}>
               Intelligent transaction categorization for Canadian businesses
             </p>
           </div>
@@ -283,16 +296,80 @@ export default function Dashboard() {
           {currentStep === 'upload' && !error && (
             <>
               <div className="bg-white rounded-2xl p-12">
-                <div className="flex items-center justify-center mb-8">
+                <div className="flex items-center justify-center mb-10">
                   <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
-                      <span className="text-slate-600 font-semibold">1</span>
+                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <span className="text-white font-bold text-lg">1</span>
                     </div>
-                    <h2 className="text-2xl font-semibold text-slate-900">
+                    <h2 className="text-2xl md:text-3xl font-bold text-slate-900" style={{ fontFamily: 'Poppins, -apple-system, BlinkMacSystemFont, sans-serif' }}>
                       Upload Bank Statement
                     </h2>
                   </div>
                 </div>
+
+                {/* Show simple success message and processing results above supported formats section */}
+                {transactions.length > 0 && (
+                  <div className="space-y-6 mb-8">
+                    <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                            <span className="text-green-600 text-lg">✓</span>
+                          </div>
+                          <div>
+                            <h3 className="text-base font-semibold text-green-900">
+                              File Processed Successfully
+                            </h3>
+                            <p className="text-sm text-green-700">
+                              {transactions.length} transactions ready for review
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setCurrentStep('review')}
+                          className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 font-medium text-sm"
+                        >
+                          Review Transactions →
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Processing Results - Show right after upload for easier access */}
+                    {processingResults && (
+                      <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm">
+                        <div className="flex items-center justify-center space-x-4 mb-6">
+                          <div className="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center">
+                            <span className="text-purple-600 text-sm font-semibold">📊</span>
+                          </div>
+                          <h3 className="text-xl font-semibold text-slate-900">
+                            Processing Results
+                          </h3>
+                        </div>
+                        <ProcessingResults {...processingResults} transactions={transactions} />
+                      </div>
+                    )}
+
+                    {/* Quick Processing Summary - Always show when transactions exist */}
+                    {!processingResults && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                            <span className="text-blue-600 text-lg">📊</span>
+                          </div>
+                          <div>
+                            <h3 className="text-base font-semibold text-blue-900">
+                              File Analysis Complete
+                            </h3>
+                            <p className="text-sm text-blue-700">
+                              {transactions.length} transactions loaded • Ready for categorization
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <FileUpload 
                   onFileProcessed={handleFileProcessed} 
                   onError={handleError} 
@@ -300,67 +377,6 @@ export default function Dashboard() {
                   aiModeEnabled={false}
                 />
               </div>
-
-              {/* Show simple success message and next step button if we have processed data */}
-              {transactions.length > 0 && (
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-6 mb-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                        <span className="text-green-600 text-lg">✓</span>
-                      </div>
-                      <div>
-                        <h3 className="text-base font-semibold text-green-900">
-                          File Processed Successfully
-                        </h3>
-                        <p className="text-sm text-green-700">
-                          {transactions.length} transactions ready for review
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setCurrentStep('review')}
-                      className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 font-medium text-sm"
-                    >
-                      Review Transactions →
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Processing Results - Show right after upload for easier access */}
-              {transactions.length > 0 && processingResults && (
-                <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm">
-                  <div className="flex items-center justify-center space-x-4 mb-6">
-                    <div className="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center">
-                      <span className="text-purple-600 text-sm font-semibold">📊</span>
-                    </div>
-                    <h3 className="text-xl font-semibold text-slate-900">
-                      Processing Results
-                    </h3>
-                  </div>
-                  <ProcessingResults {...processingResults} transactions={transactions} />
-                </div>
-              )}
-
-              {/* Quick Processing Summary - Always show when transactions exist */}
-              {transactions.length > 0 && !processingResults && (
-                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <span className="text-blue-600 text-lg">📊</span>
-                    </div>
-                    <div>
-                      <h3 className="text-base font-semibold text-blue-900">
-                        File Analysis Complete
-                      </h3>
-                      <p className="text-sm text-blue-700">
-                        {transactions.length} transactions loaded • Ready for categorization
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </>
           )}
 
@@ -368,11 +384,11 @@ export default function Dashboard() {
           {currentStep === 'review' && processingResults && transactions.length > 0 && (
             <>
               <div className="bg-white rounded-2xl p-12">
-                <div className="flex items-center justify-center space-x-4 mb-8">
-                  <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
-                    <span className="text-slate-600 font-semibold">2</span>
+                <div className="flex items-center justify-center space-x-4 mb-10">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-lg">2</span>
                   </div>
-                  <h2 className="text-2xl font-semibold text-slate-900">
+                  <h2 className="text-2xl md:text-3xl font-bold text-slate-900" style={{ fontFamily: 'Poppins, -apple-system, BlinkMacSystemFont, sans-serif' }}>
                     Processing Results
                   </h2>
                 </div>
@@ -383,12 +399,12 @@ export default function Dashboard() {
 
               {/* Transaction Review */}
               <div className="bg-white rounded-2xl p-12">
-                <div className="flex items-center justify-center mb-8">
+                <div className="flex items-center justify-center mb-10">
                   <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
-                      <span className="text-slate-600 font-semibold">3</span>
+                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <span className="text-white font-bold text-lg">3</span>
                     </div>
-                    <h2 className="text-2xl font-semibold text-slate-900">
+                    <h2 className="text-2xl md:text-3xl font-bold text-slate-900" style={{ fontFamily: 'Poppins, -apple-system, BlinkMacSystemFont, sans-serif' }}>
                       Review & Code Transactions
                     </h2>
                   </div>
@@ -447,10 +463,10 @@ export default function Dashboard() {
             <div className="space-y-8">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                    <span className="text-slate-600 font-semibold">4</span>
+                  <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-lg">4</span>
                   </div>
-                  <h2 className="text-2xl font-semibold text-slate-900">
+                  <h2 className="text-2xl md:text-3xl font-bold text-slate-900" style={{ fontFamily: 'Poppins, -apple-system, BlinkMacSystemFont, sans-serif' }}>
                     Export for Accounting
                   </h2>
                 </div>
@@ -554,193 +570,6 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-
-        {/* Q&A Section - Helpful Tips and Usage Guide */}
-        <div className="max-w-6xl mx-auto px-6 lg:px-8 py-20">
-          <div className="bg-white rounded-3xl p-12 border border-slate-200/60 shadow-xl shadow-slate-500/5">
-            <div className="text-center mb-16">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-purple-500/25">
-                <span className="text-white text-2xl">💡</span>
-              </div>
-              <h2 className="text-4xl font-bold text-slate-900 mb-4">
-                Formatting Tips & FAQ
-              </h2>
-              <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed">
-                Get the most out of Meridian Bookkeeping with these helpful tips and answers to common questions.
-              </p>
-            </div>
-
-            <div className="grid lg:grid-cols-2 gap-12">
-              {/* Left Column */}
-              <div className="space-y-8">
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-2xl p-8 border border-purple-200/50">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center">
-                    <span className="w-8 h-8 bg-purple-500 rounded-xl text-white text-sm flex items-center justify-center mr-3 font-bold">Q</span>
-                    What file formats are supported?
-                  </h3>
-                  <p className="text-slate-700 leading-relaxed mb-4">
-                    <strong>CSV files only</strong> with headers in the first row. We support all major Canadian banks including:
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 ml-4">
-                    <ul className="text-slate-700 space-y-2">
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>RBC</strong> Royal Bank</li>
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>TD</strong> Canada Trust</li>
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>BMO</strong> Bank of Montreal</li>
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>Scotiabank</strong></li>
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>CIBC</strong> Imperial Bank</li>
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>National Bank</strong> of Canada</li>
-                    </ul>
-                    <ul className="text-slate-700 space-y-2">
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>Tangerine</strong> Bank</li>
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>Simplii</strong> Financial</li>
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>Desjardins</strong> Group</li>
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>HSBC</strong> Canada</li>
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>Meridian</strong> Credit Union</li>
-                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>All</strong> Credit Unions</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-2xl p-8 border border-blue-200/50">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center">
-                    <span className="w-8 h-8 bg-blue-500 rounded-xl text-white text-sm flex items-center justify-center mr-3 font-bold">Q</span>
-                    How accurate is the AI categorization?
-                  </h3>
-                  <p className="text-slate-700 leading-relaxed mb-4">
-                    Our AI achieves <strong>85%+ accuracy</strong> on first pass, learning from:
-                  </p>
-                  <ul className="text-slate-700 space-y-2 ml-4">
-                    <li className="flex items-center"><span className="text-blue-500 mr-2">•</span> Merchant names and patterns</li>
-                    <li className="flex items-center"><span className="text-blue-500 mr-2">•</span> Transaction descriptions</li>
-                    <li className="flex items-center"><span className="text-blue-500 mr-2">•</span> Amount ranges and frequency</li>
-                    <li className="flex items-center"><span className="text-blue-500 mr-2">•</span> Your feedback and corrections</li>
-                  </ul>
-                </div>
-
-                <div className="bg-gradient-to-br from-green-50 to-green-100/50 rounded-2xl p-8 border border-green-200/50">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center">
-                    <span className="w-8 h-8 bg-green-500 rounded-xl text-white text-sm flex items-center justify-center mr-3 font-bold">Q</span>
-                    Which provinces are supported?
-                  </h3>
-                  <p className="text-slate-700 leading-relaxed">
-                    <strong>All Canadian provinces</strong> with proper tax codes and chart of accounts for ON, BC, AB, and more. 
-                    Each province has specific tax categories and compliance requirements built-in.
-                  </p>
-                </div>
-              </div>
-
-              {/* Right Column */}
-              <div className="space-y-8">
-                <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 rounded-2xl p-8 border border-amber-200/50">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center">
-                    <span className="w-8 h-8 bg-amber-500 rounded-xl text-white text-sm flex items-center justify-center mr-3 font-bold">💡</span>
-                    Pro Tips for Best Results
-                  </h3>
-                  <ul className="text-slate-700 space-y-3">
-                    <li className="flex items-start">
-                      <span className="text-amber-500 mr-3 mt-1 font-bold">1.</span>
-                      <div>
-                        <strong>Clean your CSV:</strong> Remove any summary rows or extra headers before uploading
-                      </div>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-amber-500 mr-3 mt-1 font-bold">2.</span>
-                      <div>
-                        <strong>Review AI suggestions:</strong> Check and correct categories to improve future accuracy
-                      </div>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-amber-500 mr-3 mt-1 font-bold">3.</span>
-                      <div>
-                        <strong>Use bulk actions:</strong> Select similar transactions and categorize them all at once
-                      </div>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-amber-500 mr-3 mt-1 font-bold">4.</span>
-                      <div>
-                        <strong>Export regularly:</strong> Process statements monthly for best cash flow tracking
-                      </div>
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="bg-gradient-to-br from-red-50 to-red-100/50 rounded-2xl p-8 border border-red-200/50">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center">
-                    <span className="w-8 h-8 bg-red-500 rounded-xl text-white text-sm flex items-center justify-center mr-3 font-bold">Q</span>
-                    What if I encounter errors?
-                  </h3>
-                  <p className="text-slate-700 leading-relaxed mb-4">
-                    Common issues and solutions:
-                  </p>
-                  <ul className="text-slate-700 space-y-2 ml-4">
-                    <li className="flex items-start">
-                      <span className="text-red-500 mr-2 mt-1">•</span>
-                      <div><strong>File format error:</strong> Ensure your file is saved as .csv, not .xlsx</div>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-red-500 mr-2 mt-1">•</span>
-                      <div><strong>Missing columns:</strong> Check that Date, Description, and Amount columns exist</div>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-red-500 mr-2 mt-1">•</span>
-                      <div><strong>Date format issues:</strong> We support DD/MM/YYYY, MM/DD/YYYY, and YYYY-MM-DD</div>
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 rounded-2xl p-8 border border-indigo-200/50">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center">
-                    <span className="w-8 h-8 bg-indigo-500 rounded-xl text-white text-sm flex items-center justify-center mr-3 font-bold">Q</span>
-                    Export formats available?
-                  </h3>
-                  <p className="text-slate-700 leading-relaxed mb-3">
-                    Multiple formats for seamless integration:
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white rounded-lg p-3 border border-indigo-200/50">
-                      <div className="font-semibold text-indigo-600">Xero CSV</div>
-                      <div className="text-sm text-slate-600">Direct import ready</div>
-                    </div>
-                    <div className="bg-white rounded-lg p-3 border border-indigo-200/50">
-                      <div className="font-semibold text-indigo-600">QuickBooks</div>
-                      <div className="text-sm text-slate-600">IIF format</div>
-                    </div>
-                    <div className="bg-white rounded-lg p-3 border border-indigo-200/50">
-                      <div className="font-semibold text-indigo-600">Sage 50</div>
-                      <div className="text-sm text-slate-600">Compatible CSV</div>
-                    </div>
-                    <div className="bg-white rounded-lg p-3 border border-indigo-200/50">
-                      <div className="font-semibold text-indigo-600">Generic CSV</div>
-                      <div className="text-sm text-slate-600">Universal format</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Call to Action */}
-            <div className="mt-16 text-center">
-              <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-2xl p-8 border border-slate-200/50">
-                <h3 className="text-2xl font-bold text-slate-900 mb-4">
-                  Ready to streamline your bookkeeping?
-                </h3>
-                <p className="text-slate-600 mb-6 max-w-2xl mx-auto leading-relaxed">
-                  Upload your first bank statement and experience the power of AI-driven categorization 
-                  with full Canadian tax compliance.
-                </p>
-                <button
-                  onClick={() => {
-                    setCurrentStep('upload');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all duration-300 font-semibold shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transform hover:scale-[1.02]"
-                >
-                  Get Started Now →
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Custom Keyword Manager Modal */}

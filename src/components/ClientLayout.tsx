@@ -1,26 +1,38 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Preloader from './Preloader';
+import { useAuth } from '../context/AuthContext';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [showPreloader, setShowPreloader] = useState(true);
   const [appVisible, setAppVisible] = useState(false);
+  const { user, loading } = useAuth();
 
   useEffect(() => {
     setMounted(true);
-    
-    // Show preloader for 2 seconds, then transition to app
-    const preloaderTimer = setTimeout(() => {
-      setShowPreloader(false);
-      // Small delay to allow preloader fade out, then show app
-      setTimeout(() => {
-        setAppVisible(true);
-      }, 300);
-    }, 2000);
-
-    return () => clearTimeout(preloaderTimer);
   }, []);
+
+  useEffect(() => {
+    if (mounted && !loading) {
+      if (user) {
+        // User is authenticated, show preloader briefly then transition to app
+        const preloaderTimer = setTimeout(() => {
+          setShowPreloader(false);
+          setTimeout(() => {
+            setAppVisible(true);
+          }, 300);
+        }, 1500);
+        
+        return () => clearTimeout(preloaderTimer);
+      } else {
+        // User is not authenticated, don't show ClientLayout preloader
+        // Let the main page handle showing its own Preloader with login overlay
+        setShowPreloader(false);
+        setAppVisible(true);
+      }
+    }
+  }, [mounted, loading, user]);
 
   if (!mounted) {
     return null; // Avoid hydration mismatch

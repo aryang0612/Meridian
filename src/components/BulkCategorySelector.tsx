@@ -41,7 +41,9 @@ const BulkCategorySelector: React.FC<BulkCategorySelectorProps> = ({
         await chartOfAccounts.setProvince(province);
         await chartOfAccounts.waitForInitialization();
       } catch (error) {
-        console.error('Failed to initialize chart of accounts:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to initialize chart of accounts:', error);
+        }
       } finally {
         setIsLoadingAccounts(false);
       }
