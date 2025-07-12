@@ -351,12 +351,46 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
     return { exactGroups, standaloneTransactions };
   };
 
-  // Basic handlers
+  // Enhanced handlers for bulk changes in grouped view
   const handleAccountChange = (id: string, accountCode: string) => {
     try {
-    onTransactionUpdate(id, { accountCode });
-    setManualProgress(prev => ({ ...prev, recentlyUpdated: new Set([...prev.recentlyUpdated, id]) }));
+      // Check if we're in grouped view and have multiple transactions selected
+      if (viewMode === 'grouped' && selectedTransactions.size > 1 && selectedTransactions.has(id)) {
+        // Find which group this transaction belongs to
+        const sourceTransaction = transactions.find(t => t.id === id);
+        if (sourceTransaction) {
+          const sourceGroupKey = sourceTransaction.accountCode || 'Uncategorized';
+          
+          // Find all selected transactions in the same group
+          const selectedInSameGroup = Array.from(selectedTransactions).filter(selectedId => {
+            const transaction = transactions.find(t => t.id === selectedId);
+            if (!transaction) return false;
+            const transactionGroupKey = transaction.accountCode || 'Uncategorized';
+            return transactionGroupKey === sourceGroupKey;
+          });
+          
+          if (selectedInSameGroup.length > 1) {
+            // Apply account change to all selected transactions in this group
+            selectedInSameGroup.forEach(transactionId => {
+              onTransactionUpdate(transactionId, { accountCode });
+            });
+            
+            setNotification(`Updated ${selectedInSameGroup.length} selected transactions to ${getAccountName(accountCode)}`);
+            setManualProgress(prev => ({ 
+              ...prev, 
+              recentlyUpdated: new Set([...prev.recentlyUpdated, ...selectedInSameGroup]) 
+            }));
+            
+            // Don't show bulk categorization modal for manual bulk changes
+            return;
+          }
+        }
+      }
       
+      // Single transaction update (original behavior)
+      onTransactionUpdate(id, { accountCode });
+      setManualProgress(prev => ({ ...prev, recentlyUpdated: new Set([...prev.recentlyUpdated, id]) }));
+        
       // Show bulk categorization suggestion if account is being set (not cleared)
       if (accountCode) {
         const sourceTransaction = transactions.find(t => t.id === id);
@@ -1312,13 +1346,65 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
               
               {expandedGroups.has(accountCode) && (
                 <div className="p-6">
+                  {/* Bulk Change UI for Selected Transactions */}
+                  {(() => {
+                    const selectedInGroup = groupTransactions.filter(t => selectedTransactions.has(t.id));
+                    return selectedInGroup.length > 1 ? (
+                      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-sm font-medium text-blue-900">
+                              {selectedInGroup.length} transactions selected
+                            </h4>
+                            <p className="text-xs text-blue-700">
+                              Change account for all selected transactions
+                            </p>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <SearchableAccountDropdown
+                              currentValue=""
+                              onSelect={(accountCode) => {
+                                // Apply to all selected transactions in this group
+                                selectedInGroup.forEach(transaction => {
+                                  onTransactionUpdate(transaction.id, { accountCode });
+                                });
+                                setNotification(`Updated ${selectedInGroup.length} transactions to ${getAccountName(accountCode)}`);
+                                // Clear selection after bulk update
+                                setSelectedTransactions(new Set());
+                                setShowBulkActions(false);
+                              }}
+                              placeholder="Bulk change account..."
+                            />
+                            <button
+                              onClick={() => {
+                                // Clear selection
+                                const newSelected = new Set(selectedTransactions);
+                                selectedInGroup.forEach(t => newSelected.delete(t.id));
+                                setSelectedTransactions(newSelected);
+                                setShowBulkActions(newSelected.size > 0);
+                              }}
+                              className="px-3 py-1 text-xs bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                  
                   <div className="space-y-3">
                     {groupTransactions.map((transaction) => (
                       <div 
                         key={transaction.id}
                         className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${
                           selectedTransactions.has(transaction.id) 
-                            ? 'bg-purple-50 border-purple-200' 
+                            ? (() => {
+                                const selectedInGroup = groupTransactions.filter(t => selectedTransactions.has(t.id));
+                                return selectedInGroup.length > 1 
+                                  ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-200' 
+                                  : 'bg-purple-50 border-purple-200';
+                              })()
                             : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
