@@ -196,8 +196,8 @@ export default function TransactionTable({ transactions, onTransactionUpdate, ai
             bValue = b.description.toLowerCase();
             break;
           case 'amount':
-            aValue = Math.abs(a.amount);
-            bValue = Math.abs(b.amount);
+            aValue = a.amount;
+            bValue = b.amount;
             break;
           case 'account':
             aValue = getAccountName(a.accountCode).toLowerCase();
