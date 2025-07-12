@@ -29,23 +29,22 @@ export default function NavigationBar({
         <div className="flex items-center justify-between h-20">
           {/* Left: Logo and Company Info */}
           <div className="flex items-center space-x-4 flex-shrink-0">
-            <Link href="/" className="flex items-center space-x-4 hover:opacity-80 transition-opacity">
+            <Link href="/" className="flex items-center space-x-4 hover:opacity-90 transition-all duration-300 group">
               <div className="relative">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg shadow-purple-600/20">
+                <div className="w-12 h-12 bg-white rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center group-hover:shadow-xl transition-all duration-300">
                   <Image 
                     src="/meridian-logo-new.png" 
-                    alt="Meridian" 
-                    width={40} 
-                    height={40} 
-                    className="rounded-lg object-contain"
+                    alt="Meridian AI" 
+                    width={32} 
+                    height={32} 
+                    className="object-contain"
                     priority
                   />
                 </div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-300 rounded-full opacity-40"></div>
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">Meridian AI</h1>
-                <p className="text-xs text-slate-600 -mt-1">Bookkeeping Solutions</p>
+              <div className="group-hover:transform group-hover:translate-x-0.5 transition-transform duration-300">
+                <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Meridian AI</h1>
+                <p className="text-sm text-slate-600 font-medium -mt-0.5">Bookkeeping Solutions</p>
               </div>
             </Link>
           </div>

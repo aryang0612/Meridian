@@ -327,6 +327,40 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
+
+              {/* Processing Results - Show right after upload for easier access */}
+              {transactions.length > 0 && processingResults && (
+                <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-center space-x-4 mb-6">
+                    <div className="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center">
+                      <span className="text-purple-600 text-sm font-semibold">📊</span>
+                    </div>
+                    <h3 className="text-xl font-semibold text-slate-900">
+                      Processing Results
+                    </h3>
+                  </div>
+                  <ProcessingResults {...processingResults} transactions={transactions} />
+                </div>
+              )}
+
+              {/* Quick Processing Summary - Always show when transactions exist */}
+              {transactions.length > 0 && !processingResults && (
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                      <span className="text-blue-600 text-lg">📊</span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-semibold text-blue-900">
+                        File Analysis Complete
+                      </h3>
+                      <p className="text-sm text-blue-700">
+                        {transactions.length} transactions loaded • Ready for categorization
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -493,7 +527,10 @@ export default function Dashboard() {
                     {transactions.length} transactions
                   </p>
                   <p className="text-blue-700 text-sm mt-1">
-                    Ready for categorization
+                    {processingResults?.stats?.totalFiles && processingResults.stats.totalFiles > 1 
+                      ? `From ${processingResults.stats.totalFiles} files - Ready for categorization`
+                      : 'Ready for categorization'
+                    }
                   </p>
                 </div>
                 
@@ -544,11 +581,24 @@ export default function Dashboard() {
                   <p className="text-slate-700 leading-relaxed mb-4">
                     <strong>CSV files only</strong> with headers in the first row. We support all major Canadian banks including:
                   </p>
-                  <ul className="text-slate-700 space-y-2 ml-4">
-                    <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> RBC, TD, BMO, Scotiabank</li>
-                    <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> CIBC, National Bank</li>
-                    <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Credit unions and online banks</li>
-                  </ul>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 ml-4">
+                    <ul className="text-slate-700 space-y-2">
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>RBC</strong> Royal Bank</li>
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>TD</strong> Canada Trust</li>
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>BMO</strong> Bank of Montreal</li>
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>Scotiabank</strong></li>
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>CIBC</strong> Imperial Bank</li>
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>National Bank</strong> of Canada</li>
+                    </ul>
+                    <ul className="text-slate-700 space-y-2">
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>Tangerine</strong> Bank</li>
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>Simplii</strong> Financial</li>
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>Desjardins</strong> Group</li>
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>HSBC</strong> Canada</li>
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>Meridian</strong> Credit Union</li>
+                      <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> <strong>All</strong> Credit Unions</li>
+                    </ul>
+                  </div>
                 </div>
 
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-2xl p-8 border border-blue-200/50">

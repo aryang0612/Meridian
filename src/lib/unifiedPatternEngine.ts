@@ -179,6 +179,40 @@ export const UNIFIED_PATTERNS: UnifiedPattern[] = [
   { pattern: /rogers.*bank.*mastercard/i, merchant: 'Rogers Bank Mastercard Payment', accountCode: '800', confidence: 96, priority: 85, category: 'merchant' },
   { pattern: /rogers.*mastercard/i, merchant: 'Rogers Mastercard Payment', accountCode: '800', confidence: 96, priority: 85, category: 'merchant' },
   
+  // === GAS STATIONS AND FUEL (HIGH PRIORITY - FIXED CATEGORIZATION) ===
+  { pattern: /phillips\s*66/i, merchant: 'Phillips 66', accountCode: '449', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /shell\s+\d+/i, merchant: 'Shell Gas Station', accountCode: '449', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /shell/i, merchant: 'Shell Gas Station', accountCode: '449', confidence: 90, priority: 80, category: 'merchant' },
+  { pattern: /esso\s+\d+/i, merchant: 'Esso', accountCode: '449', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /esso/i, merchant: 'Esso', accountCode: '449', confidence: 90, priority: 80, category: 'merchant' },
+  { pattern: /petro[\s\-]?canada/i, merchant: 'Petro-Canada', accountCode: '449', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /chevron\s+\d+/i, merchant: 'Chevron', accountCode: '449', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /chevron/i, merchant: 'Chevron', accountCode: '449', confidence: 90, priority: 80, category: 'merchant' },
+  { pattern: /speedway\s+\d+/i, merchant: 'Speedway', accountCode: '449', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /speedway/i, merchant: 'Speedway', accountCode: '449', confidence: 90, priority: 80, category: 'merchant' },
+  { pattern: /husky\s+\d+/i, merchant: 'Husky', accountCode: '449', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /husky/i, merchant: 'Husky', accountCode: '449', confidence: 90, priority: 80, category: 'merchant' },
+  { pattern: /mobil\s+\d+/i, merchant: 'Mobil', accountCode: '449', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /mobil/i, merchant: 'Mobil', accountCode: '449', confidence: 90, priority: 80, category: 'merchant' },
+  { pattern: /sunoco\s+\d+/i, merchant: 'Sunoco', accountCode: '449', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /sunoco/i, merchant: 'Sunoco', accountCode: '449', confidence: 90, priority: 80, category: 'merchant' },
+  { pattern: /fuel\s+point/i, merchant: 'Fuel Point', accountCode: '449', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /point\s+fuel/i, merchant: 'Point Fuel', accountCode: '449', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /gas\s+station/i, merchant: 'Gas Station', accountCode: '449', confidence: 90, priority: 80, category: 'merchant' },
+
+  // === INTEREST AND FEES (FIXED CATEGORIZATION) ===
+  { pattern: /purchase\s+interest/i, merchant: 'Purchase Interest', accountCode: '437', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /interest\s+charge/i, merchant: 'Interest Charge', accountCode: '437', confidence: 96, priority: 85, category: 'merchant' },
+  { pattern: /interest\s+expense/i, merchant: 'Interest Expense', accountCode: '437', confidence: 96, priority: 85, category: 'merchant' },
+
+  // === ONLINE SHOPPING (IMPROVED CATEGORIZATION) ===
+  { pattern: /alibaba\.com/i, merchant: 'Alibaba.com', accountCode: '310', confidence: 90, priority: 80, category: 'merchant' }, // Cost of goods sold for business purchases
+  { pattern: /aliexpress/i, merchant: 'AliExpress', accountCode: '455', confidence: 90, priority: 80, category: 'merchant' }, // Supplies for smaller items
+  { pattern: /amazon\s+mktp/i, merchant: 'Amazon Marketplace', accountCode: '455', confidence: 85, priority: 75, category: 'merchant' },
+  { pattern: /amzn\s+mktp/i, merchant: 'Amazon Marketplace', accountCode: '455', confidence: 85, priority: 75, category: 'merchant' },
+  { pattern: /amazon\.ca/i, merchant: 'Amazon Canada', accountCode: '455', confidence: 85, priority: 75, category: 'merchant' },
+  { pattern: /amazon/i, merchant: 'Amazon', accountCode: '455', confidence: 80, priority: 70, category: 'merchant' },
+
   // Food & Restaurants (Account Code: 420)
   { pattern: /tim\s*hortons?/i, merchant: 'Tim Hortons', accountCode: '420', confidence: 96, priority: 80, category: 'merchant' },
   { pattern: /tims/i, merchant: 'Tim Hortons', accountCode: '420', confidence: 90, priority: 75, category: 'merchant' },
@@ -198,6 +232,15 @@ export const UNIFIED_PATTERNS: UnifiedPattern[] = [
   { pattern: /wendys/i, merchant: 'Wendys', accountCode: '420', confidence: 90, priority: 75, category: 'merchant' },
   { pattern: /dairy\s*queen/i, merchant: 'Dairy Queen', accountCode: '420', confidence: 95, priority: 80, category: 'merchant' },
   { pattern: /dairyqueen/i, merchant: 'Dairy Queen', accountCode: '420', confidence: 90, priority: 75, category: 'merchant' },
+  { pattern: /pizza\s+garden/i, merchant: 'Pizza Garden', accountCode: '420', confidence: 95, priority: 80, category: 'merchant' },
+  { pattern: /pizza\s+hut/i, merchant: 'Pizza Hut', accountCode: '420', confidence: 95, priority: 80, category: 'merchant' },
+  { pattern: /pizzeria/i, merchant: 'Pizzeria', accountCode: '420', confidence: 90, priority: 75, category: 'merchant' },
+  { pattern: /ristorante/i, merchant: 'Restaurant', accountCode: '420', confidence: 90, priority: 75, category: 'merchant' },
+  { pattern: /restaurant/i, merchant: 'Restaurant', accountCode: '420', confidence: 85, priority: 70, category: 'merchant' },
+  { pattern: /lounge/i, merchant: 'Lounge', accountCode: '420', confidence: 85, priority: 70, category: 'merchant' },
+  { pattern: /tap\s+&?\s*barrel/i, merchant: 'Tap & Barrel', accountCode: '420', confidence: 95, priority: 80, category: 'merchant' },
+  { pattern: /thaigo/i, merchant: 'Thai Restaurant', accountCode: '420', confidence: 90, priority: 75, category: 'merchant' },
+  { pattern: /chickpea/i, merchant: 'Chickpea Restaurant', accountCode: '420', confidence: 90, priority: 75, category: 'merchant' },
   { pattern: /\bdq\b/i, merchant: 'Dairy Queen', accountCode: '420', confidence: 85, priority: 70, category: 'merchant' },
   { pattern: /pizza\s*pizza/i, merchant: 'Pizza Pizza', accountCode: '420', confidence: 95, priority: 80, category: 'merchant' },
   { pattern: /pizza\s*hut/i, merchant: 'Pizza Hut', accountCode: '420', confidence: 95, priority: 80, category: 'merchant' },

@@ -61,7 +61,19 @@ export default function FileUpload({ onFileProcessed, onError, disabled, aiModeE
   const processFile = useCallback(async (file: File) => {
     const fileExtension = file.name.toLowerCase().split('.').pop();
     
-    if (!fileExtension || (fileExtension !== 'csv' && fileExtension !== 'pdf')) {
+    // Enhanced file type detection with explicit CSV and PDF checks
+    const isCSVFile = (file.type === 'text/csv' || file.name.endsWith('.csv') || fileExtension === 'csv');
+    const isPDFFile = (file.type === 'application/pdf' || file.name.endsWith('.pdf') || fileExtension === 'pdf');
+    
+    console.log(`🔍 File type detection for "${file.name}":`, {
+      fileName: file.name,
+      mimeType: file.type,
+      fileExtension,
+      isCSVFile,
+      isPDFFile
+    });
+    
+    if (!isCSVFile && !isPDFFile) {
       onError('Please upload a CSV or PDF file only', file.name);
       return;
     }
@@ -73,7 +85,8 @@ export default function FileUpload({ onFileProcessed, onError, disabled, aiModeE
     try {
       let result;
       
-      if (fileExtension === 'pdf') {
+      if (isPDFFile) {
+        console.log('📄 Routing to PDF processor...');
         if (!pdfProcessor) {
           throw new Error('PDF processing is not available in this environment');
         }
@@ -96,13 +109,16 @@ export default function FileUpload({ onFileProcessed, onError, disabled, aiModeE
         } else {
           result = await csvProcessor.parseAndCategorizeCSV(csvFile, undefined, aiModeEnabled);
         }
-      } else {
+      } else if (isCSVFile) {
+        console.log('📊 Routing to CSV processor...');
         setProcessingStep('Processing CSV file...');
         if (typeof csvProcessor.parseAndCategorizeCSV === 'function' && csvProcessor.parseAndCategorizeCSV.length > 1) {
           result = await csvProcessor.parseAndCategorizeCSV(file, setProgress, aiModeEnabled);
         } else {
           result = await csvProcessor.parseAndCategorizeCSV(file, undefined, aiModeEnabled);
         }
+      } else {
+        throw new Error('Unable to determine file type for processing');
       }
       
       // Map transactions for reports
@@ -140,6 +156,197 @@ export default function FileUpload({ onFileProcessed, onError, disabled, aiModeE
     }
   }, [onFileProcessed, onError, csvProcessor, pdfProcessor, setFinancialData, setIsSample]);
 
+  // Multi-file processing logic
+  const processMultipleFiles = useCallback(async (files: File[]) => {
+    if (files.length === 1) {
+      // Single file - use the regular processFile function
+      await processFile(files[0]);
+    } else {
+      // Multiple files - combine all transactions
+      setIsProcessing(true);
+      setUploadedFile(null);
+      setProgress(0);
+      
+      // Arrays to accumulate results from all files
+      const allTransactions: Transaction[] = [];
+      const allValidations: ValidationResult[] = [];
+      const allBankFormats: (BankFormat | 'Unknown')[] = [];
+      const allStats: any[] = [];
+      const processedFiles: string[] = [];
+      
+      let currentFileIndex = 0;
+      const totalFiles = files.length;
+      
+      try {
+        for (const file of files) {
+          currentFileIndex++;
+          const fileExtension = file.name.toLowerCase().split('.').pop();
+          
+          // Enhanced file type detection
+          const isCSVFile = (file.type === 'text/csv' || file.name.endsWith('.csv') || fileExtension === 'csv');
+          const isPDFFile = (file.type === 'application/pdf' || file.name.endsWith('.pdf') || fileExtension === 'pdf');
+          
+          if (!isCSVFile && !isPDFFile) {
+            console.warn(`⚠️ Skipping unsupported file: ${file.name}`);
+            continue;
+          }
+          
+          setProcessingStep(`Processing file ${currentFileIndex} of ${totalFiles}: ${file.name}`);
+          const fileProgress = ((currentFileIndex - 1) / totalFiles) * 100;
+          setProgress(fileProgress);
+          
+          console.log(`🔄 Processing file ${currentFileIndex}/${totalFiles}: ${file.name}`);
+          
+          try {
+            let result;
+            
+            if (isPDFFile) {
+              console.log(`📄 Processing PDF: ${file.name}`);
+              if (!pdfProcessor) {
+                throw new Error('PDF processing is not available in this environment');
+              }
+              
+              const pdfResult = await pdfProcessor.convertPDFToCSV(file);
+              
+              if (!pdfResult.success) {
+                console.error(`❌ PDF processing failed for ${file.name}:`, pdfResult.error);
+                continue; // Skip this file but continue with others
+              }
+              
+              // Create a CSV file from the extracted text
+              const csvBlob = new Blob([pdfResult.csvText], { type: 'text/csv' });
+              const csvFile = new (window as any).File([csvBlob], file.name.replace('.pdf', '.csv'), { type: 'text/csv' });
+              
+              if (typeof csvProcessor.parseAndCategorizeCSV === 'function' && csvProcessor.parseAndCategorizeCSV.length > 1) {
+                result = await csvProcessor.parseAndCategorizeCSV(csvFile, (progress) => {
+                  const overallProgress = fileProgress + (progress / totalFiles);
+                  setProgress(overallProgress);
+                }, aiModeEnabled);
+              } else {
+                result = await csvProcessor.parseAndCategorizeCSV(csvFile, undefined, aiModeEnabled);
+              }
+            } else if (isCSVFile) {
+              console.log(`📊 Processing CSV: ${file.name}`);
+              if (typeof csvProcessor.parseAndCategorizeCSV === 'function' && csvProcessor.parseAndCategorizeCSV.length > 1) {
+                result = await csvProcessor.parseAndCategorizeCSV(file, (progress) => {
+                  const overallProgress = fileProgress + (progress / totalFiles);
+                  setProgress(overallProgress);
+                }, aiModeEnabled);
+              } else {
+                result = await csvProcessor.parseAndCategorizeCSV(file, undefined, aiModeEnabled);
+              }
+            }
+            
+            if (result && result.transactions && result.transactions.length > 0) {
+              // Add file source information to each transaction
+              const transactionsWithSource = result.transactions.map((tx: Transaction) => ({
+                ...tx,
+                id: `${file.name}-${tx.id}`, // Ensure unique IDs across files
+                source: file.name, // Add source file info
+                originalId: tx.id // Keep original ID for reference
+              }));
+              
+              allTransactions.push(...transactionsWithSource);
+              allValidations.push(result.validation);
+                             allBankFormats.push(result.bankFormat as BankFormat | 'Unknown');
+              allStats.push(result.stats);
+              processedFiles.push(file.name);
+              
+              console.log(`✅ Successfully processed ${file.name}: ${result.transactions.length} transactions`);
+            } else {
+              console.warn(`⚠️ No transactions found in ${file.name}`);
+            }
+            
+          } catch (fileError) {
+            console.error(`❌ Error processing file ${file.name}:`, fileError);
+            // Continue processing other files even if one fails
+          }
+        }
+        
+        setProgress(100);
+        
+        if (allTransactions.length === 0) {
+          onError('No transactions found in any of the uploaded files. Please check your files and try again.');
+          return;
+        }
+        
+                 // Combine all results into a single result object
+         const combinedValidation: ValidationResult = {
+           isValid: allValidations.every(v => v.isValid),
+           errors: allValidations.flatMap(v => v.errors),
+           warnings: allValidations.flatMap(v => v.warnings)
+         };
+        
+        // Determine the most common bank format
+        const bankFormatCounts = allBankFormats.reduce((acc, format) => {
+          acc[format] = (acc[format] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+                 
+         const mostCommonBankFormat = (Object.entries(bankFormatCounts)
+           .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown') as BankFormat | 'Unknown';
+        
+        // Combine stats
+        const combinedStats = {
+          totalFiles: processedFiles.length,
+          totalTransactions: allTransactions.length,
+          fileBreakdown: allStats.map((stat, index) => ({
+            fileName: processedFiles[index],
+            transactions: stat.total || stat.totalTransactions || 0,
+            ...stat
+          })),
+          dateRange: {
+            start: allTransactions.reduce((earliest, tx) => {
+              const txDate = new Date(tx.date);
+              return txDate < earliest ? txDate : earliest;
+            }, new Date(allTransactions[0]?.date || new Date())),
+            end: allTransactions.reduce((latest, tx) => {
+              const txDate = new Date(tx.date);
+              return txDate > latest ? txDate : latest;
+            }, new Date(allTransactions[0]?.date || new Date()))
+          }
+        };
+        
+        // Map transactions for reports
+        const reportTransactions = allTransactions.map(mapToReportTransaction);
+        
+        // Set context for reports
+        const startDate = combinedStats.dateRange.start;
+        const endDate = combinedStats.dateRange.end;
+        const companyName = `Combined Files (${processedFiles.length} files)`;
+        
+        setFinancialData({
+          transactions: reportTransactions,
+          startDate,
+          endDate,
+          companyName,
+          reportDate: new Date(),
+        });
+        setIsSample(false);
+        
+        // Call the callback with combined results
+        const combinedResult = {
+          transactions: allTransactions,
+          validation: combinedValidation,
+          bankFormat: mostCommonBankFormat,
+          stats: combinedStats
+        };
+        
+        console.log(`🎉 Successfully processed ${processedFiles.length} files with ${allTransactions.length} total transactions`);
+        
+        onFileProcessed(combinedResult);
+        
+      } catch (error) {
+        console.error('Multi-file processing error:', error);
+        onError(`Failed to process multiple files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setIsProcessing(false);
+        setProcessingStep('');
+        setProgress(0);
+      }
+    }
+  }, [processFile, csvProcessor, pdfProcessor, setFinancialData, setIsSample, onFileProcessed, onError, mapToReportTransaction, aiModeEnabled]);
+
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
@@ -147,7 +354,7 @@ export default function FileUpload({ onFileProcessed, onError, disabled, aiModeE
     }
     // Reset the input value to allow re-uploading the same file
     event.target.value = '';
-  }, [processFile]);
+  }, [processMultipleFiles]);
 
   const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -156,7 +363,7 @@ export default function FileUpload({ onFileProcessed, onError, disabled, aiModeE
     if (files && files.length > 0) {
       processMultipleFiles(Array.from(files));
     }
-  }, [processFile]);
+  }, [processMultipleFiles]);
 
   const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -167,27 +374,6 @@ export default function FileUpload({ onFileProcessed, onError, disabled, aiModeE
     event.preventDefault();
     setIsDragOver(false);
   }, []);
-
-  // Multi-file processing logic
-  const processMultipleFiles = useCallback(async (files: File[]) => {
-    if (files.length === 1) {
-      // Single file - use the regular processFile function
-      await processFile(files[0]);
-    } else {
-      // Multiple files
-      setIsProcessing(true);
-      setUploadedFile(null);
-      setProcessingStep('Processing multiple files...');
-      try {
-        for (const file of files) {
-          await processFile(file);
-        }
-      } finally {
-        setIsProcessing(false);
-        setProcessingStep('');
-      }
-    }
-  }, [processFile]);
 
   return (
     <div className="space-y-8">
@@ -260,10 +446,13 @@ export default function FileUpload({ onFileProcessed, onError, disabled, aiModeE
             ) : (
               <>
                 <p className="text-xl font-semibold text-slate-900">
-                  Drop your bank statement here
+                  Drop your bank statements here
                 </p>
                 <p className="text-slate-600 leading-relaxed">
-                  Or click to browse and select your CSV or PDF file
+                  Or click to browse and select your CSV or PDF files
+                </p>
+                <p className="text-sm text-purple-600 font-medium">
+                  ✨ Multiple files supported - combine all your statements into one table
                 </p>
               </>
             )}

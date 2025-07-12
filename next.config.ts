@@ -13,10 +13,12 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   output: 'standalone',
-  // Skip static generation for error pages
+  // Skip static generation for error pages to avoid context issues
   generateBuildId: async () => {
     return 'meridian-2.0-build'
   },
+  // Configure server external packages
+  serverExternalPackages: ['@supabase/supabase-js'],
   // Webpack configuration for better stability
   webpack: (config, { isServer }) => {
     // Optimize for better chunk loading

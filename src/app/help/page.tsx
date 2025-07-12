@@ -342,14 +342,14 @@ export default function HelpPage() {
                         Supported Canadian Banks
                       </h3>
                       <div className="bg-white border border-slate-200 rounded-xl p-6">
-                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
                           <div className="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-lg p-4 text-center">
                             <div className="font-bold text-red-900 text-sm">RBC</div>
                             <div className="text-xs text-red-700">Royal Bank</div>
                           </div>
                           <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-4 text-center">
                             <div className="font-bold text-green-900 text-sm">TD</div>
-                            <div className="text-xs text-green-700">TD Bank</div>
+                            <div className="text-xs text-green-700">Canada Trust</div>
                           </div>
                           <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4 text-center">
                             <div className="font-bold text-blue-900 text-sm">BMO</div>
@@ -363,15 +363,39 @@ export default function HelpPage() {
                             <div className="font-bold text-red-900 text-sm">CIBC</div>
                             <div className="text-xs text-red-700">Imperial Bank</div>
                           </div>
+                          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-lg p-4 text-center">
+                            <div className="font-bold text-indigo-900 text-sm">National</div>
+                            <div className="text-xs text-indigo-700">Bank</div>
+                          </div>
+                          <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-lg p-4 text-center">
+                            <div className="font-bold text-orange-900 text-sm">Tangerine</div>
+                            <div className="text-xs text-orange-700">Bank</div>
+                          </div>
+                          <div className="bg-gradient-to-br from-teal-50 to-teal-100 border border-teal-200 rounded-lg p-4 text-center">
+                            <div className="font-bold text-teal-900 text-sm">Simplii</div>
+                            <div className="text-xs text-teal-700">Financial</div>
+                          </div>
+                          <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 border border-yellow-200 rounded-lg p-4 text-center">
+                            <div className="font-bold text-yellow-900 text-sm">Desjardins</div>
+                            <div className="text-xs text-yellow-700">Group</div>
+                          </div>
+                          <div className="bg-gradient-to-br from-rose-50 to-rose-100 border border-rose-200 rounded-lg p-4 text-center">
+                            <div className="font-bold text-rose-900 text-sm">HSBC</div>
+                            <div className="text-xs text-rose-700">Canada</div>
+                          </div>
+                          <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 border border-cyan-200 rounded-lg p-4 text-center">
+                            <div className="font-bold text-cyan-900 text-sm">Meridian</div>
+                            <div className="text-xs text-cyan-700">Credit Union</div>
+                          </div>
                           <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-4 text-center">
-                            <div className="font-bold text-purple-900 text-sm">Credit</div>
+                            <div className="font-bold text-purple-900 text-sm">All Credit</div>
                             <div className="text-xs text-purple-700">Unions</div>
                           </div>
                         </div>
                         
                         <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                           <h5 className="font-semibold text-yellow-900 mb-2">Additional Supported Institutions</h5>
-                          <p className="text-yellow-800 text-sm">National Bank, Desjardins, Tangerine, PC Financial, and most Canadian credit unions. If your bank isn&apos;t listed, contact support.</p>
+                          <p className="text-yellow-800 text-sm">PC Financial, Laurentian Bank, ATB Financial, and hundreds of credit unions across Canada. If your bank isn&apos;t listed, contact support.</p>
                         </div>
                       </div>
                     </div>

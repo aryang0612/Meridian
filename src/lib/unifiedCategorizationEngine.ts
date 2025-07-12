@@ -3964,16 +3964,117 @@ ANALYZE THIS TRANSACTION NOW:`;
     
     let fallbackAccountCode = '453'; // Office Expenses (default)
     let fallbackReasoning = 'No pattern match found, using office expenses as default';
+    let confidence = 25; // Low confidence for fallback
     
+    // === SMART CATEGORIZATION LOGIC ===
+    
+    // 1. POSITIVE AMOUNTS (Revenue/Income)
     if (transaction.amount > 0) {
-      fallbackAccountCode = '260'; // Other Revenue
-      fallbackReasoning = 'Unidentified income, categorized as other revenue';
-    } else if (amount > 1000) {
-      fallbackAccountCode = '310'; // Cost of Goods Sold
-      fallbackReasoning = 'Large expense, likely project-related cost';
-    } else if (description.includes('transfer') || description.includes('memo')) {
-      fallbackAccountCode = '877'; // Tracking Transfers
-      fallbackReasoning = 'Appears to be a transfer transaction';
+      if (description.includes('payment') || description.includes('deposit')) {
+        fallbackAccountCode = '200'; // Sales Revenue for customer payments
+        fallbackReasoning = 'Positive amount with payment/deposit keywords - likely customer payment';
+        confidence = 40;
+      } else if (description.includes('interest') || description.includes('dividend')) {
+        fallbackAccountCode = '270'; // Interest Income
+        fallbackReasoning = 'Positive amount with interest/dividend keywords';
+        confidence = 45;
+      } else {
+        fallbackAccountCode = '260'; // Other Revenue
+        fallbackReasoning = 'Unidentified income, categorized as other revenue';
+        confidence = 30;
+      }
+    } 
+    // 2. NEGATIVE AMOUNTS (Expenses)
+    else {
+      // Transfer-related transactions
+      if (description.includes('transfer') || description.includes('memo') || description.includes('etfr') || description.includes('e-tfr')) {
+        fallbackAccountCode = '877'; // Tracking Transfers
+        fallbackReasoning = 'Contains transfer keywords - categorized as transfer';
+        confidence = 50;
+      }
+      // Fee-related transactions
+      else if (description.includes('fee') || description.includes('charge') || description.includes('service')) {
+        fallbackAccountCode = '404'; // Bank Fees
+        fallbackReasoning = 'Contains fee/charge keywords - likely bank fee';
+        confidence = 45;
+      }
+      // Interest-related transactions
+      else if (description.includes('interest') && !description.includes('credit')) {
+        fallbackAccountCode = '437'; // Interest Expense
+        fallbackReasoning = 'Contains interest keywords - categorized as interest expense';
+        confidence = 50;
+      }
+      // Gas/fuel related
+      else if (description.includes('gas') || description.includes('fuel') || description.includes('petrol') || description.includes('station')) {
+        fallbackAccountCode = '449'; // Motor Vehicle Expenses
+        fallbackReasoning = 'Contains gas/fuel keywords - categorized as motor vehicle expense';
+        confidence = 50;
+      }
+      // Food related
+      else if (description.includes('restaurant') || description.includes('food') || description.includes('coffee') || description.includes('pizza') || description.includes('burger')) {
+        fallbackAccountCode = '420'; // Entertainment
+        fallbackReasoning = 'Contains food/restaurant keywords - categorized as entertainment';
+        confidence = 45;
+      }
+      // Phone/internet related
+      else if (description.includes('phone') || description.includes('internet') || description.includes('wireless') || description.includes('mobile') || description.includes('telecom')) {
+        fallbackAccountCode = '489'; // Telephone & Internet
+        fallbackReasoning = 'Contains telecommunications keywords';
+        confidence = 45;
+      }
+      // Utility related
+      else if (description.includes('hydro') || description.includes('electric') || description.includes('utility') || description.includes('power')) {
+        fallbackAccountCode = '442'; // Electricity
+        fallbackReasoning = 'Contains utility keywords - categorized as electricity';
+        confidence = 45;
+      }
+      // Insurance related
+      else if (description.includes('insurance') || description.includes('coverage') || description.includes('policy')) {
+        fallbackAccountCode = '433'; // Insurance
+        fallbackReasoning = 'Contains insurance keywords';
+        confidence = 45;
+      }
+      // Travel related
+      else if (description.includes('travel') || description.includes('hotel') || description.includes('airline') || description.includes('flight')) {
+        fallbackAccountCode = '493'; // Travel
+        fallbackReasoning = 'Contains travel keywords';
+        confidence = 45;
+      }
+      // Professional services
+      else if (description.includes('legal') || description.includes('lawyer') || description.includes('attorney') || description.includes('consultant')) {
+        fallbackAccountCode = '441'; // Legal Expenses
+        fallbackReasoning = 'Contains professional service keywords';
+        confidence = 45;
+      }
+      // Purchase/shopping related
+      else if (description.includes('purchase') || description.includes('buy') || description.includes('store') || description.includes('shop')) {
+        if (amount > 1000) {
+          fallbackAccountCode = '310'; // Cost of Goods Sold for large purchases
+          fallbackReasoning = 'Large purchase - likely project-related cost of goods sold';
+          confidence = 40;
+        } else {
+          fallbackAccountCode = '455'; // Supplies for smaller purchases
+          fallbackReasoning = 'Small purchase - likely supplies or small tools';
+          confidence = 35;
+        }
+      }
+      // Large amounts without clear keywords
+      else if (amount > 2000) {
+        fallbackAccountCode = '310'; // Cost of Goods Sold for very large amounts
+        fallbackReasoning = 'Very large expense - likely project-related cost of goods sold';
+        confidence = 35;
+      }
+      else if (amount > 500) {
+        fallbackAccountCode = '310'; // Cost of Goods Sold for medium-large amounts
+        fallbackReasoning = 'Medium-large expense - possibly project-related cost';
+        confidence = 30;
+      }
+      // Default to Office Expenses for small unidentified expenses
+      else {
+        fallbackAccountCode = '453'; // Office Expenses
+        fallbackReasoning = 'Small unidentified expense - categorized as office expenses';
+        confidence = 25;
+      }
     }
     
     const inflowOutflow = this.getInflowOutflow(transaction, fallbackAccountCode);
@@ -3981,7 +4082,7 @@ ANALYZE THIS TRANSACTION NOW:`;
     return {
       category: 'Uncategorized',
       accountCode: fallbackAccountCode,
-      confidence: 25,
+      confidence: confidence,
       reasoning: fallbackReasoning,
       source: 'fallback',
       merchant: this.extractMerchant(transaction.description),

@@ -213,285 +213,364 @@ export class PDFProcessor {
     
     // Debug: Log first few lines to understand format
     if (typeof window !== 'undefined') {
-      console.log('First 10 lines for parsing:');
-      lines.slice(0, 10).forEach((line, index) => {
+      console.log('=== PDF PARSING DEBUG INFO ===');
+      console.log(`Total lines extracted: ${lines.length}`);
+      console.log('First 20 lines for parsing:');
+      lines.slice(0, 20).forEach((line, index) => {
         console.log(`${index + 1}: "${line}"`);
       });
+      console.log('=====================================');
     }
     
-    // RBC-specific date patterns
-    const rbcDatePatterns = [
-      /(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/i, // 11 Dec, 15 Jan, etc.
-    ];
-    
-    // More flexible date patterns - including month abbreviations
+    // Enhanced date patterns - more flexible
     const datePatterns = [
-      /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/, // DD/MM/YYYY or MM/DD/YYYY
-      /(\d{4})-(\d{1,2})-(\d{1,2})/, // YYYY-MM-DD
-      /(\d{1,2})-(\d{1,2})-(\d{2,4})/, // DD-MM-YYYY
-      /(\d{1,2})\/(\d{1,2})\/(\d{2})/, // DD/MM/YY or MM/DD/YY
-      /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{1,2})/, // MAY02, JAN15, etc.
+      // Standard formats
+      /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/g, // DD/MM/YYYY or MM/DD/YYYY
+      /(\d{4})-(\d{1,2})-(\d{1,2})/g, // YYYY-MM-DD
+      /(\d{1,2})-(\d{1,2})-(\d{2,4})/g, // DD-MM-YYYY
+      /(\d{1,2})\/(\d{1,2})\/(\d{2})/g, // DD/MM/YY or MM/DD/YY
+      
+      // Month abbreviations
+      /(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{2,4})?/gi,
+      /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{1,2}),?\s*(\d{2,4})?/gi,
+      /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{1,2})/gi,
+      
+      // Variations with dots
+      /(\d{1,2})\.(\d{1,2})\.(\d{2,4})/g, // DD.MM.YYYY
+      /(\d{4})\.(\d{1,2})\.(\d{1,2})/g, // YYYY.MM.DD
+      
+      // Variations with spaces
+      /(\d{1,2})\s+(\d{1,2})\s+(\d{2,4})/g, // DD MM YYYY
+      /(\d{2,4})\s+(\d{1,2})\s+(\d{1,2})/g, // YYYY MM DD
     ];
     
-    // RBC-specific amount patterns for separate withdrawal/deposit columns
-    const rbcAmountPatterns = [
-      /([-+]?[\d,]+\.?\d*)\s*,\s*$/, // Withdrawal amount at end (e.g., "12.00,")
-      /,\s*([-+]?[\d,]+\.?\d*)\s*$/, // Deposit amount at end (e.g., ",600.00")
-      /,\s*([-+]?[\d,]+\.?\d*)\s*,/, // Deposit amount in middle (e.g., ",600.00,")
-      /([-+]?[\d,]+\.?\d*)\s*,\s*[-+]?[\d,]*\.?\d*\s*$/, // Withdrawal followed by balance
-      /,\s*([-+]?[\d,]+\.?\d*)\s*,\s*[-+]?[\d,]*\.?\d*\s*$/, // Deposit followed by balance
-      /([-+]?[\d,]+\.?\d*)\s*$/, // Any amount at end
-    ];
-    
-    // More flexible amount patterns
+    // Enhanced amount patterns - more flexible
     const amountPatterns = [
-      /([-+]?[\d,]+\.?\d*)\s*[A-Z]{3}\d{1,2}/, // Amount followed by date like "2,500.00 MAY04"
-      /([-+]?[\d,]+\.?\d*)\s*$/, // Amount at end with optional spaces
-      /([-+]?[\d,]+\.?\d*)/, // Any amount in line
-    ];
-    
-    // Add new regex patterns for more PDF layouts
-    const ADDITIONAL_DATE_PATTERNS = [
-      // e.g., 2023-05-01, 01-05-2023, 01.05.2023, 2023/05/01
-      /\b\d{4}[-\/.]\d{2}[-\/.]\d{2}\b/, // YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
-      /\b\d{2}[-\/.]\d{2}[-\/.]\d{4}\b/, // DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY
-      /\b\d{2}[-\/.]\d{2}[-\/.]\d{2}\b/, // DD-MM-YY, DD/MM/YY, DD.MM.YY
-      // e.g., 1 May 2023, May 1, 2023
-      /\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b/,
-      /\b[A-Za-z]{3,9}\s+\d{1,2},\s+\d{4}\b/
+      // Standard currency formats
+      /\$?\s*([+-]?\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g, // $1,234.56 or 1,234.56
+      /([+-]?\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(?:CR|DR)?/gi, // 1,234.56 CR/DR
+      /([+-]?\d+(?:\.\d{2})?)/g, // Simple amounts like 123.45
+      
+      // Special formats
+      /\(\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*\)/g, // (1,234.56) - negative amounts
+      /(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*-/g, // 1,234.56- - negative amounts
+      /\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g, // $ 1,234.56
     ];
     
     let processedCount = 0;
+    let skippedCount = 0;
     
-    for (const line of lines) {
-      // Skip header lines, balance lines, and summary lines
-      if (this.isHeaderOrSummaryLine(line)) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      if (!line || line.length < 5) {
         continue;
       }
       
-      // First try RBC-specific date pattern
-      let dateMatch = null;
-      let datePattern = null;
-      let isRbcFormat = false;
+      // Skip obvious header/summary lines but be more lenient
+      if (this.isHeaderOrSummaryLineEnhanced(line)) {
+        skippedCount++;
+        continue;
+      }
       
-      for (const pattern of rbcDatePatterns) {
-        dateMatch = line.match(pattern);
-        if (dateMatch) {
-          datePattern = pattern;
-          isRbcFormat = true;
+      // Try to find date patterns
+      let dateMatch = null;
+      let foundDate = '';
+      
+      for (const pattern of datePatterns) {
+        pattern.lastIndex = 0; // Reset regex
+        const match = pattern.exec(line);
+        if (match) {
+          dateMatch = match;
+          foundDate = match[0];
           break;
         }
       }
       
       if (!dateMatch) {
-        // Try regular date patterns
-        for (const pattern of datePatterns) {
-          dateMatch = line.match(pattern);
-          if (dateMatch) {
-            datePattern = pattern;
-            break;
-          }
-        }
+        continue;
       }
       
-      if (!dateMatch) {
-        // Try additional date patterns
-        for (const additionalPattern of ADDITIONAL_DATE_PATTERNS) {
-          dateMatch = line.match(additionalPattern);
-          if (dateMatch) {
-            datePattern = additionalPattern;
-            break;
-          }
-        }
-      }
-      
-      if (!dateMatch) continue;
-      
-      // Extract date and handle month abbreviations
-      let date = dateMatch[0];
-      if (isRbcFormat) {
-        // Handle RBC format: "11 Dec" -> "11/12/2024" (assuming current year)
-        const day = dateMatch[1];
-        const month = dateMatch[2].toUpperCase();
-        const monthMap: { [key: string]: string } = {
-          'JAN': '01', 'FEB': '02', 'MAR': '03', 'APR': '04',
-          'MAY': '05', 'JUN': '06', 'JUL': '07', 'AUG': '08',
-          'SEP': '09', 'OCT': '10', 'NOV': '11', 'DEC': '12'
-        };
-        const monthNum = monthMap[month] || '01';
-        const currentYear = new Date().getFullYear();
-        date = `${day}/${monthNum}/${currentYear}`;
-      } else if (datePattern && datePattern.toString().includes('JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC')) {
-        const monthMap: { [key: string]: string } = {
-          'JAN': '01', 'FEB': '02', 'MAR': '03', 'APR': '04',
-          'MAY': '05', 'JUN': '06', 'JUL': '07', 'AUG': '08',
-          'SEP': '09', 'OCT': '10', 'NOV': '11', 'DEC': '12'
-        };
-        const month = date.substring(0, 3);
-        const day = date.substring(3);
-        const monthNum = monthMap[month] || '01';
-        date = `${day}/${monthNum}/2022`; // Assuming 2022 based on your data
-      }
-      
-      // Look for amount - try RBC patterns first if it's RBC format
+      // Try to find amount patterns
       let amountMatch = null;
-      if (isRbcFormat) {
-        for (const pattern of rbcAmountPatterns) {
-          amountMatch = line.match(pattern);
-          if (amountMatch) break;
+      let foundAmount = '';
+      
+      for (const pattern of amountPatterns) {
+        pattern.lastIndex = 0; // Reset regex
+        const match = pattern.exec(line);
+        if (match) {
+          amountMatch = match;
+          foundAmount = match[1] || match[0];
+          break;
         }
       }
       
       if (!amountMatch) {
-        // Try regular amount patterns
-        for (const pattern of amountPatterns) {
-          amountMatch = line.match(pattern);
-          if (amountMatch) break;
-        }
+        continue;
       }
       
-      if (!amountMatch) continue;
-      
-      const amount = amountMatch[1];
-      
-      // Extract description (everything except date and amount)
+      // Extract description (everything else)
       let description = line;
       
       // Remove the date from the line
-      description = description.replace(dateMatch[0], '').trim();
+      description = description.replace(foundDate, '').trim();
       
-      // Remove the amount from the line - be more careful to avoid partial matches
-      try {
-        const escapedAmount = amount.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const amountRegex = new RegExp(`\\b${escapedAmount}\\b`);
-        description = description.replace(amountRegex, '').trim();
-      } catch (regexError) {
-        console.warn('Regex error with amount:', amount, regexError);
-        // Fallback: simple string replacement
-        description = description.replace(amount, '').trim();
-      }
+      // Remove the amount from the line
+      description = description.replace(foundAmount, '').trim();
+      description = description.replace(/^\$/, '').trim(); // Remove $ signs
+      description = description.replace(/\s+/g, ' ').trim(); // Normalize whitespace
       
-      // Clean up description more thoroughly
-      description = description.replace(/^\s*[-.,|]\s*/, ''); // Remove leading punctuation
-      description = description.replace(/[-.,|]\s*$/, ''); // Remove trailing punctuation
-      description = description.replace(/\s+/, ' '); // Normalize whitespace
-      description = description.replace(/^\s*[0-9]+\s*$/, ''); // Remove standalone numbers
+      // Clean up description
+      description = description.replace(/^[-.,|:;]\s*/, ''); // Remove leading punctuation
+      description = description.replace(/[-.,|:;]\s*$/, ''); // Remove trailing punctuation
+      description = description.replace(/^\s*\d+\s*$/, ''); // Remove standalone numbers
       description = description.trim();
       
-      if (description.length > 2 && this.isValidTransaction(description, amount, date)) {
+      // More lenient validation
+      if (description.length >= 2 && this.isValidTransactionEnhanced(description, foundAmount, foundDate)) {
+        // Normalize the date
+        const normalizedDate = this.normalizeDateEnhanced(foundDate);
+        
+        // Determine transaction sign
+        const finalAmount = this.determineTransactionSign(description, foundAmount);
+        
         transactions.push({
-          date: this.normalizeDate(date),
-          description,
-          amount
+          date: normalizedDate,
+          description: description,
+          amount: finalAmount
         });
         
         // Debug: Log successful transaction parsing
-        if (typeof window !== 'undefined' && processedCount < 5) {
-          console.log(`Parsed transaction ${processedCount + 1}:`, {
+        if (typeof window !== 'undefined' && processedCount < 10) {
+          console.log(`✅ Parsed transaction ${processedCount + 1}:`, {
+            lineNumber: i + 1,
             originalLine: line,
-            date: this.normalizeDate(date),
+            foundDate,
+            normalizedDate,
             description,
-            amount,
-            isRbcFormat
+            foundAmount,
+            finalAmount
           });
         }
         processedCount++;
       }
     }
     
-    // Debug: Log summary
+    // Debug: Log comprehensive summary
     if (typeof window !== 'undefined') {
-      console.log(`Parsing complete. Found ${transactions.length} transactions from ${processedCount} processed lines.`);
+      console.log('=== PDF PARSING SUMMARY ===');
+      console.log(`Total lines processed: ${lines.length}`);
+      console.log(`Lines skipped (headers/summaries): ${skippedCount}`);
+      console.log(`Valid transactions found: ${transactions.length}`);
+      console.log('===============================');
+      
+      if (transactions.length === 0) {
+        console.log('❌ No transactions found. This could be due to:');
+        console.log('1. The PDF format is not recognized');
+        console.log('2. The PDF contains only account summaries, not transaction details');
+        console.log('3. The date/amount patterns are too different from expected formats');
+        console.log('');
+        console.log('Sample lines that were NOT parsed:');
+        lines.slice(0, 10).forEach((line, index) => {
+          if (line.trim() && !this.isHeaderOrSummaryLineEnhanced(line)) {
+            console.log(`${index + 1}: "${line}"`);
+          }
+        });
+      }
     }
     
     return transactions;
   }
-  
-  private isHeaderOrSummaryLine(line: string): boolean {
+
+  private isHeaderOrSummaryLineEnhanced(line: string): boolean {
     const lowerLine = line.toLowerCase();
     
-    // Skip common header/summary keywords - but be more specific
+    // Skip common header/summary keywords - but be more lenient
     const skipKeywords = [
-      'statement period', 'account number', 'date description amount',
-      'balance forward', 'page', 'summary', 'total', 'bank branch',
-      'customer service', 'service charge', 'opening balance'
+      'statement period', 'account number', 'account summary', 'page',
+      'customer service', 'branch', 'transit', 'institution',
+      'opening balance', 'closing balance', 'beginning balance', 'ending balance',
+      'total deposits', 'total withdrawals', 'total debits', 'total credits',
+      'service charges', 'interest earned', 'summary of account activity',
+      'account details', 'contact information', 'important notices'
     ];
     
-    // Only skip if the line contains multiple header keywords or is clearly a header
+    // Skip lines that are too short (likely headers)
+    if (line.trim().length < 8) {
+      return true;
+    }
+    
+    // Skip lines that are mostly uppercase and look like headers
+    if (line === line.toUpperCase() && line.length < 50) {
+      return true;
+    }
+    
+    // Check for header keywords
     const keywordCount = skipKeywords.filter(keyword => lowerLine.includes(keyword)).length;
-    
-    // Also skip lines that are too short (likely headers) - but be more lenient for RBC format
-    if (line.trim().length < 5) {
+    if (keywordCount > 0) {
       return true;
     }
     
-    // Skip lines that are all uppercase and contain typical header words
-    if (line === line.toUpperCase() && (lowerLine.includes('date') || lowerLine.includes('amount'))) {
+    // Skip lines that are just "Date Description Amount" or similar
+    if (lowerLine.includes('date') && lowerLine.includes('description') && lowerLine.includes('amount')) {
       return true;
     }
     
-    // Skip lines that are just "Opening Balance" or similar
-    if (lowerLine.trim() === 'opening balance') {
-      return true;
-    }
-    
-    return keywordCount >= 2; // Only skip if multiple header keywords are found
+    return false;
   }
   
-  private isValidTransaction(description: string, amount: string, date: string): boolean {
-    // Skip transactions that are likely not real transactions
+  private isValidTransactionEnhanced(description: string, amount: string, date: string): boolean {
+    // More lenient validation
+    
+    // Skip if description is too short
+    if (description.length < 2) {
+      return false;
+    }
+    
+    // Skip obvious non-transaction descriptions
     const invalidKeywords = [
-      'balance', 'forward', 'page', 'summary', 'total', 'statement',
-      'account', 'number', 'branch', 'customer', 'service'
+      'page', 'continued', 'subtotal', 'total', 'summary',
+      'account number', 'statement period', 'branch', 'transit'
     ];
     
     const lowerDesc = description.toLowerCase();
     const hasInvalidKeyword = invalidKeywords.some(keyword => lowerDesc.includes(keyword));
     
-    // Skip if description is too short or contains invalid keywords
-    if (description.length < 3 || hasInvalidKeyword) {
+    if (hasInvalidKeyword) {
       return false;
     }
     
-    // Validate amount format
-    const amountRegex = /^[-+]?[\d,]+\.?\d*$/;
-    if (!amountRegex.test(amount)) {
+    // Validate amount format - more flexible
+    const cleanAmount = amount.replace(/[,$\s]/g, '');
+    const amountRegex = /^[+-]?\d+\.?\d*$/;
+    if (!amountRegex.test(cleanAmount)) {
       return false;
     }
     
-    // Validate date format
-    const dateRegex = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/;
-    if (!dateRegex.test(date)) {
+    // Don't validate date format too strictly - just check if it looks like a date
+    if (!date || date.length < 3) {
       return false;
     }
     
     return true;
   }
   
-  private normalizeDate(dateStr: string): string {
-    // Convert various date formats to DD/MM/YYYY
+  private normalizeDateEnhanced(dateStr: string): string {
+    // Handle various date formats more flexibly
+    const monthMap: { [key: string]: string } = {
+      'JAN': '01', 'FEB': '02', 'MAR': '03', 'APR': '04',
+      'MAY': '05', 'JUN': '06', 'JUL': '07', 'AUG': '08',
+      'SEP': '09', 'OCT': '10', 'NOV': '11', 'DEC': '12'
+    };
+    
+    const currentYear = new Date().getFullYear();
+    
+    // Handle month abbreviations
+    const monthAbbrevMatch = dateStr.match(/(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s*(\d{2,4})?/i);
+    if (monthAbbrevMatch) {
+      const day = monthAbbrevMatch[1].padStart(2, '0');
+      const month = monthMap[monthAbbrevMatch[2].toUpperCase()];
+      const year = monthAbbrevMatch[3] || currentYear.toString();
+      return `${day}/${month}/${year}`;
+    }
+    
+    // Handle other patterns
     const patterns = [
       { regex: /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/, format: 'DD/MM/YYYY' },
       { regex: /(\d{4})-(\d{1,2})-(\d{1,2})/, format: 'YYYY-MM-DD' },
-      { regex: /(\d{1,2})-(\d{1,2})-(\d{2,4})/, format: 'DD-MM-YYYY' }
+      { regex: /(\d{1,2})-(\d{1,2})-(\d{2,4})/, format: 'DD-MM-YYYY' },
+      { regex: /(\d{1,2})\.(\d{1,2})\.(\d{2,4})/, format: 'DD.MM.YYYY' }
     ];
     
     for (const pattern of patterns) {
       const match = dateStr.match(pattern.regex);
       if (match) {
-        if (pattern.format === 'DD/MM/YYYY') {
-          return dateStr; // Already in correct format
+        let day, month, year;
+        
+        if (pattern.format === 'DD/MM/YYYY' || pattern.format === 'DD-MM-YYYY' || pattern.format === 'DD.MM.YYYY') {
+          day = match[1].padStart(2, '0');
+          month = match[2].padStart(2, '0');
+          year = match[3];
         } else if (pattern.format === 'YYYY-MM-DD') {
-          const [, year, month, day] = match;
-          return `${day}/${month}/${year}`;
-        } else if (pattern.format === 'DD-MM-YYYY') {
-          const [, day, month, year] = match;
-          return `${day}/${month}/${year}`;
+          year = match[1];
+          month = match[2].padStart(2, '0');
+          day = match[3].padStart(2, '0');
         }
+        
+        // Handle 2-digit years
+        if (year && year.length === 2) {
+          year = '20' + year;
+        }
+        
+        return `${day}/${month}/${year}`;
       }
     }
     
     return dateStr; // Return as-is if no pattern matches
+  }
+  
+  private determineTransactionSign(description: string, amount: string): string {
+    const lowerDesc = description.toLowerCase();
+    
+    // Convert amount to number for processing
+    const numericAmount = Math.abs(parseFloat(amount.replace(/[^0-9.-]/g, '')));
+    
+    // Keywords that typically indicate INFLOWS (should be positive)
+    const inflowKeywords = [
+      'deposit', 'credit', 'refund', 'return', 'rebate', 'cashback', 'cash back',
+      'payment received', 'incoming transfer', 'salary', 'payroll', 'wage',
+      'interest earned', 'dividend', 'bonus', 'settlement', 'reimbursement',
+      'tax refund', 'government payment', 'federal payment', 'insurance claim',
+      'loan proceeds', 'deposit slip', 'wire transfer in', 'ach credit',
+      'direct deposit', 'check deposit', 'mobile deposit', 'atm deposit'
+    ];
+    
+    // Keywords that typically indicate OUTFLOWS (should be negative)  
+    const outflowKeywords = [
+      'withdrawal', 'purchase', 'payment', 'transfer', 'fee', 'charge', 'debit',
+      'atm', 'pos', 'point of sale', 'check', 'cheque', 'bill payment', 'autopay',
+      'pre-authorized', 'paypal', 'e-transfer', 'interac', 'wire transfer',
+      'service charge', 'monthly fee', 'overdraft', 'nsf', 'interest charge',
+      'loan payment', 'mortgage', 'credit card', 'insurance premium', 'tax payment',
+      'subscription', 'membership', 'utility', 'rent', 'gas', 'grocery', 'restaurant',
+      'amazon', 'walmart', 'costco', 'shoppers', 'loblaws', 'metro', 'sobeys',
+      'tim hortons', 'starbucks', 'mcdonalds', 'shell', 'esso', 'petro-canada',
+      'canadian tire', 'home depot', 'rona', 'ikea', 'best buy'
+    ];
+    
+    // Check for inflow keywords first (these are less common, so prioritize them)
+    const hasInflowKeyword = inflowKeywords.some(keyword => lowerDesc.includes(keyword));
+    
+    // Check for outflow keywords
+    const hasOutflowKeyword = outflowKeywords.some(keyword => lowerDesc.includes(keyword));
+    
+    // Special handling for specific patterns
+    if (lowerDesc.includes('balance forward')) {
+      return numericAmount.toString(); // Opening balances are typically positive
+    }
+    
+    // If amount already has a negative sign, preserve it
+    if (amount.includes('-')) {
+      return `-${numericAmount}`;
+    }
+    
+    // If amount already has a positive sign, preserve it  
+    if (amount.includes('+')) {
+      return numericAmount.toString();
+    }
+    
+    // Apply logic based on keywords
+    if (hasInflowKeyword && !hasOutflowKeyword) {
+      return numericAmount.toString(); // Positive for inflows
+    }
+    
+    if (hasOutflowKeyword && !hasInflowKeyword) {
+      return `-${numericAmount}`; // Negative for outflows
+    }
+    
+    // Default assumption: Most bank statement transactions are outflows (expenses)
+    // This is the typical case for personal/business banking
+    return `-${numericAmount}`;
   }
   
   private transactionsToCSV(transactions: Array<{ date: string; description: string; amount: string }>): string {

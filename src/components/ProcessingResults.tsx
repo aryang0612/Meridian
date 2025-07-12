@@ -16,6 +16,13 @@ interface ProcessingResultsProps {
     categorizedPercent: number;
     highConfidencePercent: number;
     needsReviewPercent: number;
+    // Multi-file support
+    totalFiles?: number;
+    fileBreakdown?: Array<{
+      fileName: string;
+      transactions: number;
+      [key: string]: any;
+    }>;
   };
 }
 
@@ -25,6 +32,12 @@ export default function ProcessingResults({
   bankFormat, 
   stats 
 }: ProcessingResultsProps) {
+  // Debug: Log the stats to see what's being passed
+  console.log('📊 ProcessingResults - Stats received:', stats);
+  console.log('📊 ProcessingResults - Categorized percent:', stats.categorizedPercent);
+  console.log('📊 ProcessingResults - High confidence percent:', stats.highConfidencePercent);
+  console.log('📊 ProcessingResults - Needs review percent:', stats.needsReviewPercent);
+  
   // Calculate date range
   const dates = transactions.map(t => new Date(t.date)).sort((a, b) => a.getTime() - b.getTime());
   const startDate = dates[0]?.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -52,7 +65,10 @@ export default function ProcessingResults({
               Processing Complete
           </h3>
             <p className="text-purple-700 mt-1 leading-relaxed font-medium">
-              Your bank statement has been successfully processed and categorized using intelligent pattern matching.
+              {stats.totalFiles && stats.totalFiles > 1 
+                ? `Your ${stats.totalFiles} bank statements have been successfully processed and combined into one table.`
+                : 'Your bank statement has been successfully processed and categorized using intelligent pattern matching.'
+              }
             </p>
           </div>
         </div>
@@ -134,6 +150,41 @@ export default function ProcessingResults({
         </div>
       </div>
 
+      {/* File Breakdown (for multiple files) */}
+      {stats.totalFiles && stats.totalFiles > 1 && stats.fileBreakdown && (
+        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-lg shadow-slate-500/5">
+          <div className="flex items-center space-x-4 mb-6">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/25">
+              <span className="text-white text-xl">📁</span>
+            </div>
+            <h4 className="text-xl font-bold text-slate-900">
+              File Breakdown
+            </h4>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {stats.fileBreakdown.map((file, index) => (
+              <div key={index} className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 border border-slate-200">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <span className="text-blue-600 text-sm font-bold">
+                      {file.fileName.split('.').pop()?.toUpperCase() || 'FILE'}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-900 truncate" title={file.fileName}>
+                      {file.fileName}
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      {file.transactions} transactions
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Categorization Results */}
       <div className="bg-white rounded-2xl p-12 border border-slate-200 shadow-lg shadow-slate-500/5">
         <div className="flex items-center space-x-4 mb-12">
@@ -150,12 +201,12 @@ export default function ProcessingResults({
           <div className="text-center">
             <div className="relative inline-flex">
               <div className="w-28 h-28 bg-gradient-to-br from-purple-100 to-purple-200 rounded-3xl flex items-center justify-center shadow-lg shadow-purple-500/10 border border-purple-200">
-                <span className="text-4xl font-bold text-purple-700">{stats.categorizedPercent}%</span>
+                <span className="text-4xl font-bold text-purple-700">{stats.categorizedPercent || 0}%</span>
               </div>
             </div>
             <h5 className="font-bold text-slate-900 mt-6 text-lg">Categorized</h5>
             <p className="text-purple-600 leading-relaxed font-medium">
-              {stats.categorized} of {stats.total} transactions
+              {stats.categorized || 0} of {stats.total || 0} transactions
             </p>
           </div>
 
@@ -163,12 +214,12 @@ export default function ProcessingResults({
           <div className="text-center">
             <div className="relative inline-flex">
               <div className="w-28 h-28 bg-gradient-to-br from-green-100 to-green-200 rounded-3xl flex items-center justify-center shadow-lg shadow-green-500/10 border border-green-200">
-                <span className="text-4xl font-bold text-green-700">{stats.highConfidencePercent}%</span>
+                <span className="text-4xl font-bold text-green-700">{stats.highConfidencePercent || 0}%</span>
               </div>
             </div>
             <h5 className="font-bold text-slate-900 mt-6 text-lg">High Confidence</h5>
             <p className="text-green-600 leading-relaxed font-medium">
-              {stats.highConfidence} transactions (80%+ confidence)
+              {stats.highConfidence || 0} transactions (80%+ confidence)
             </p>
           </div>
 
@@ -176,12 +227,12 @@ export default function ProcessingResults({
           <div className="text-center">
             <div className="relative inline-flex">
               <div className="w-28 h-28 bg-gradient-to-br from-amber-100 to-amber-200 rounded-3xl flex items-center justify-center shadow-lg shadow-amber-500/10 border border-amber-200">
-                <span className="text-4xl font-bold text-amber-700">{stats.needsReviewPercent}%</span>
+                <span className="text-4xl font-bold text-amber-700">{stats.needsReviewPercent || 0}%</span>
               </div>
             </div>
             <h5 className="font-bold text-slate-900 mt-6 text-lg">Needs Review</h5>
             <p className="text-amber-600 leading-relaxed font-medium">
-              {stats.needsReview} transactions require attention
+              {stats.needsReview || 0} transactions require attention
             </p>
           </div>
         </div>
@@ -190,18 +241,18 @@ export default function ProcessingResults({
         <div className="mt-16">
           <div className="flex justify-between text-purple-700 mb-6">
             <span className="font-bold text-lg">Categorization Progress</span>
-            <span className="font-bold text-lg">{stats.categorizedPercent}% complete</span>
+            <span className="font-bold text-lg">{stats.categorizedPercent || 0}% complete</span>
           </div>
           <div className="w-full bg-slate-100 rounded-full h-4 shadow-inner">
             <div className="flex h-4 rounded-full overflow-hidden">
               <div 
                 className="bg-gradient-to-r from-purple-600 to-purple-700 transition-all duration-500 ease-out"
-                style={{ width: `${stats.highConfidencePercent}%` }}
+                style={{ width: `${stats.highConfidencePercent || 0}%` }}
                 title="High confidence categorizations"
               />
               <div 
                 className="bg-gradient-to-r from-purple-400 to-purple-500 transition-all duration-500 ease-out"
-                style={{ width: `${stats.categorizedPercent - stats.highConfidencePercent}%` }}
+                style={{ width: `${Math.max(0, (stats.categorizedPercent || 0) - (stats.highConfidencePercent || 0))}%` }}
                 title="Medium confidence categorizations"
               />
             </div>

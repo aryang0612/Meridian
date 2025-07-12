@@ -14,6 +14,8 @@ export interface Transaction {
   merchant?: string;
   taxCode?: string;
   taxRate?: number; // Tax rate as percentage (e.g., 13 for 13%)
+  source?: string; // Source file name for multi-file uploads
+  originalId?: string; // Original transaction ID before file combination
   // Feedback system (optional - won't break existing data)
   feedback?: {
     isCorrect: boolean;

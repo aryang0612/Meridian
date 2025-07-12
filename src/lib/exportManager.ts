@@ -91,7 +91,7 @@ export class ExportManager {
         description: 'Ready-to-import Xero format with account codes and tax rates (RECOMMENDED)',
         fileExtension: 'csv',
         columns: [
-          { header: 'Date', key: 'date', required: true, transform: (t) => new Date(t.date).toLocaleDateString('en-AU') },
+          { header: 'Date', key: 'date', required: true, transform: (t) => this.formatDateForExport(t.date, 'DD/MM/YYYY') },
           { header: 'Amount', key: 'amount', required: true, transform: (t) => t.amount.toFixed(2) },
           { header: 'Payee', key: 'merchant' },
           { header: 'Description', key: 'description' },
@@ -117,7 +117,7 @@ export class ExportManager {
         description: 'Simplified Xero format (use if full format times out)',
         fileExtension: 'csv',
         columns: [
-          { header: 'Date', key: 'date', required: true, transform: (t) => new Date(t.date).toLocaleDateString('en-AU') },
+          { header: 'Date', key: 'date', required: true, transform: (t) => this.formatDateForExport(t.date, 'DD/MM/YYYY') },
           { header: 'Amount', key: 'amount', required: true, transform: (t) => t.amount.toFixed(2) },
           { header: 'Payee', key: 'merchant' },
           { header: 'Description', key: 'description' },
@@ -141,7 +141,7 @@ export class ExportManager {
         description: 'Compatible with QuickBooks Online bank import format',
         fileExtension: 'csv',
         columns: [
-          { header: 'Date', key: 'date', required: true, transform: (t) => new Date(t.date).toLocaleDateString('en-US') },
+          { header: 'Date', key: 'date', required: true, transform: (t) => this.formatDateForExport(t.date, 'MM/DD/YYYY') },
           { header: 'Description', key: 'description', required: true },
           { header: 'Amount', key: 'amount', required: true, transform: (t) => t.amount.toFixed(2) },
           { header: 'Account', key: 'accountCode', transform: (t, coa) => this.getAccountNameForQuickBooks(t, coa) },
@@ -157,7 +157,7 @@ export class ExportManager {
         description: 'Compatible with Sage 50 (Simply Accounting) import format',
         fileExtension: 'csv',
         columns: [
-          { header: 'Date', key: 'date', required: true, transform: (t) => new Date(t.date).toLocaleDateString('en-CA') },
+          { header: 'Date', key: 'date', required: true, transform: (t) => this.formatDateForExport(t.date, 'DD/MM/YYYY') },
           { header: 'Journal', key: 'journal', transform: () => 'General Journal' },
           { header: 'Account', key: 'accountCode', required: true },
           { header: 'Debits', key: 'debit', transform: (t) => t.amount < 0 ? Math.abs(t.amount).toFixed(2) : '0.00' },
@@ -173,7 +173,7 @@ export class ExportManager {
         description: 'Simple format for most accounting software (universal)',
         fileExtension: 'csv',
         columns: [
-          { header: 'Date', key: 'date', required: true, transform: (t) => new Date(t.date).toLocaleDateString('en-CA') },
+          { header: 'Date', key: 'date', required: true, transform: (t) => this.formatDateForExport(t.date, 'DD/MM/YYYY') },
           { header: 'Description', key: 'description', required: true },
           { header: 'Amount', key: 'amount', required: true, transform: (t) => t.amount.toFixed(2) },
           { header: 'Category', key: 'category' },
@@ -420,6 +420,45 @@ export class ExportManager {
     const province = options.province.toLowerCase();
     
     return `meridian_export_${formatName}_${province}_${date}.${format.fileExtension}`;
+  }
+
+  /**
+   * Format date for export without timezone issues
+   */
+  private formatDateForExport(dateString: string, format: string): string {
+    try {
+      // Parse YYYY-MM-DD format without timezone issues
+      const parts = dateString.split('-');
+      if (parts.length !== 3) {
+        throw new Error('Invalid date format');
+      }
+      
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      const day = parseInt(parts[2]);
+      
+      // Validate date components
+      if (isNaN(year) || isNaN(month) || isNaN(day)) {
+        throw new Error('Invalid date components');
+      }
+      
+      // Format according to specified format
+      switch (format) {
+        case 'DD/MM/YYYY':
+          return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
+        case 'MM/DD/YYYY':
+          return `${month.toString().padStart(2, '0')}/${day.toString().padStart(2, '0')}/${year}`;
+        case 'YYYY-MM-DD':
+          return dateString; // Already in correct format
+        default:
+          // Default to DD/MM/YYYY
+          return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
+      }
+    } catch (error) {
+      console.error('Date formatting error:', error, 'for date:', dateString);
+      // Fallback to original string if parsing fails
+      return dateString;
+    }
   }
 
   /**

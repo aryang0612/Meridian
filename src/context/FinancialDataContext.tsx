@@ -201,7 +201,7 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
 
 export const useFinancialData = () => {
   const context = useContext(FinancialDataContext);
-  if (!context) {
+  if (context === undefined) {
     // During server-side rendering, context might not be available
     // Return a safe default instead of throwing
     if (typeof window === 'undefined') {
